@@ -73,4 +73,17 @@ log "Starting environment setup..."
 install_packages
 
 # Proceed to compilation
-log "Environment setup complete. Ready for compilation."
+read -p "Do you want to proceed with compiling? (y/n): " CONTINUE_COMPILE
+if [[ "$CONTINUE_COMPILE" =~ ^[Yy]$ ]]; then
+    if [ -f "./compile.sh" ]; then
+        chmod +x ./compile.sh
+        log "Starting compilation with ./compile.sh..."
+        ./compile.sh
+    else
+        log "[ERROR] compile.sh not found in the current directory. Exiting."
+        exit 1
+    fi
+else
+    log "Compilation skipped. Environment setup complete."
+    log "You can manually run ./compile.sh when ready."
+fi
