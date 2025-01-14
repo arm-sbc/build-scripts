@@ -11,3 +11,6 @@ if the build fails install the missing dependencies.
   	cd build-scripts
   	./set_env.sh
 
+select the board
+
+follow instructions
