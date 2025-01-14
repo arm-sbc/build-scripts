@@ -6,5 +6,5 @@ install the missing dependencies.
 
 [git clone https://github.com/arm-sbc/build-scrpits.git.](https://github.com/arm-sbc/build-scripts.git)
 
-./set_env.sh)
+[./set_env.sh)
 
