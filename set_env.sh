@@ -1,5 +1,16 @@
 #!/bin/bash
 
+echo "Select your board:"
+echo "1) Rockchip"
+echo "2) Allwinner"
+
+read -p "Enter the number corresponding to your choice: " BOARD_CHOICE
+
+if [ "$BOARD_CHOICE" == "1" ]; then
+    echo "Rockchip board selected."
+    # Existing Rockchip setup
+    #!/bin/bash
+
 # Function to log messages with timestamps
 log() {
   echo -e "\033[1;34m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m"  # Blue color for logs
@@ -186,3 +197,106 @@ download_kernel_source
 log "Environment setup complete. Ready for compilation."
 ask_to_continue
 
+
+elif [ "$BOARD_CHOICE" == "2" ]; then
+    echo "Select your Allwinner board:"
+    echo "1) ARM-SBC-RWA-A64"
+    echo "2) ARM-SBC-RP-A40i"
+    echo "3) ARM-SBC-RP-T527"
+    echo "4) ARM-SBC-XZ-A64"
+    echo "5) ARM-SBC-XZ-A20"
+
+    read -p "Enter the number corresponding to your choice: " ALLWINNER_CHOICE
+
+    case $ALLWINNER_CHOICE in
+        1)
+            echo "Configuring environment for ARM-SBC-RWA-A64..."
+                    if [[ "$ALLWINNER_CHOICE" == "1" || "$ALLWINNER_CHOICE" == "4" ]]; then
+            echo "Checking dependencies..."
+if ! command -v or1k-linux-musl-gcc &> /dev/null; then
+    echo "Dependency 'or1k-linux-musl' not found. Installing..."
+    if [ -x "$(command -v apt-get)" ]; then
+        sudo apt-get update
+        sudo apt-get install -y or1k-linux-musl
+    else
+        echo "Package manager not found or unsupported. Please install 'or1k-linux-musl' manually."
+        exit 1
+    fi
+else
+    echo "Dependency 'or1k-linux-musl' is already installed."
+fi
+
+echo "Downloading Crust firmware for A64 boards..."
+            if [ ! -d "crust" ]; then
+                git clone https://github.com/crust-firmware/crust
+            else
+                echo "Crust firmware source already exists. Skipping download."
+            fi
+            cd crust
+            echo "Setting up environment for compilation."
+            export CROSS_COMPILE=or1k-linux-musl-
+            echo "Use the following commands in a separate script to compile Crust:"
+            echo "make pine64_plus_defconfig"
+            echo "make scp"
+            cd ..
+        else
+            echo "No additional setup required for the selected Allwinner board."
+        fi
+
+            ;;
+        2)
+            echo "Configuring environment for ARM-SBC-RP-A40i..."
+            # Add specific environment setup for ARM-SBC-RP-A40i here
+            ;;
+        3)
+            echo "Configuring environment for ARM-SBC-RP-T527..."
+            # Add specific environment setup for ARM-SBC-RP-T527 here
+            ;;
+        4)
+            echo "Configuring environment for ARM-SBC-XZ-A64..."
+                    if [[ "$ALLWINNER_CHOICE" == "1" || "$ALLWINNER_CHOICE" == "4" ]]; then
+            echo "Checking dependencies..."
+if ! command -v or1k-linux-musl-gcc &> /dev/null; then
+    echo "Dependency 'or1k-linux-musl' not found. Installing..."
+    if [ -x "$(command -v apt-get)" ]; then
+        sudo apt-get update
+        sudo apt-get install -y or1k-linux-musl
+    else
+        echo "Package manager not found or unsupported. Please install 'or1k-linux-musl' manually."
+        exit 1
+    fi
+else
+    echo "Dependency 'or1k-linux-musl' is already installed."
+fi
+
+echo "Downloading Crust firmware for A64 boards..."
+            if [ ! -d "crust" ]; then
+                git clone https://github.com/crust-firmware/crust
+            else
+                echo "Crust firmware source already exists. Skipping download."
+            fi
+            cd crust
+            echo "Setting up environment for compilation."
+            export CROSS_COMPILE=or1k-linux-musl-
+            echo "Use the following commands in a separate script to compile Crust:"
+            echo "make pine64_plus_defconfig"
+            echo "make scp"
+            cd ..
+        else
+            echo "No additional setup required for the selected Allwinner board."
+        fi
+
+            ;;
+        5)
+            echo "Configuring environment for ARM-SBC-XZ-A20..."
+            # Add specific environment setup for ARM-SBC-XZ-A20 here
+            ;;
+        *)
+            echo "Invalid choice. Exiting."
+            exit 1
+            ;;
+    esac
+else
+    echo "Invalid choice. Exiting."
+    exit 1
+fi
