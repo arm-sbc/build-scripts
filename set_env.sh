@@ -75,15 +75,24 @@ install_packages
 # Proceed to compilation
 read -p "Do you want to proceed with compiling? (y/n): " CONTINUE_COMPILE
 if [[ "$CONTINUE_COMPILE" =~ ^[Yy]$ ]]; then
-    if [ -f "./compile.sh" ]; then
-        chmod +x ./compile.sh
-        log "Starting compilation with ./compile.sh..."
-        ./compile.sh
+    if [[ "$CHIP" == "a64" || "$CHIP" == "a40i" ]]; then
+        SCRIPT="sunxi-compile.sh"
     else
-        log "[ERROR] compile.sh not found in the current directory. Exiting."
+        SCRIPT="rk-compile.sh"
+    fi
+
+    if [ -f "./$SCRIPT" ]; then
+        chmod +x ./"$SCRIPT"
+        log "Starting compilation with ./$SCRIPT..."
+        ./"$SCRIPT"
+    else
+        log "[ERROR] $SCRIPT not found in the current directory. Exiting."
         exit 1
     fi
 else
     log "Compilation skipped. Environment setup complete."
-    log "You can manually run ./compile.sh when ready."
+    log "You can manually run the appropriate script when ready:"
+    log "  For Allwinner: ./sunxi-compile.sh"
+    log "  For Rockchip: ./rk-compile.sh"
 fi
+
