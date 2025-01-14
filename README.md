@@ -8,6 +8,6 @@ The script will install necessary dependencies for compilation, however there mi
 if the build fails install the missing dependencies.
 
 	git clone https://github.com/arm-sbc/build-scripts.git
-  	cd rockchip-bsp
+  	cd build-scripts
   	./set_env.sh
 
