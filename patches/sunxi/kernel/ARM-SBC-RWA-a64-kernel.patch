@@ -282,11 +282,6 @@
 +
 +
 +
-+&sound_hdmi {
-+	status = "okay";
-+};
-+
-+
 +&i2s0 {
 +	status = "okay";
 +};
