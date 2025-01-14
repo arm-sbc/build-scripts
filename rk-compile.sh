@@ -37,7 +37,7 @@ apply_patches() {
   log "Starting patch application process..."
 
   # Define patch directories
-  PATCH_DIRS=("patches/rockchip//kernel" "patches/rockchip/uboot")
+  PATCH_DIRS=("patches/kernel" "patches/uboot")
   log "Using patches from patches/kernel and patches/uboot."
 
   log "Debugging patch directories and files..."

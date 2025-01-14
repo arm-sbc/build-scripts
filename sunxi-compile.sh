@@ -97,12 +97,9 @@ setup_crust_firmware() {
     SCP_BIN="crust/build/scp/scp.bin"
 
     if [ ! -f "$SCP_BIN" ]; then
-      log "Crust SCP binary not found. Compiling SCP..."
+      log "Downloading Crust SCP binary..."
       cd crust || error "Failed to enter Crust directory."
-      export CROSS_COMPILE=or1k-linux-musl-
-      make pine64_plus_defconfig || error "Failed to configure Crust firmware."
-      make scp || error "Failed to compile Crust firmware."
-      [ -f "$SCP_BIN" ] || error "Crust SCP binary not found after compilation."
+      git pull || error "Failed to update Crust repository."
       cd - > /dev/null
     else
       log "Using existing Crust SCP binary at $SCP_BIN."
@@ -115,7 +112,6 @@ setup_crust_firmware() {
   fi
 }
 
-
 # Compile U-Boot
 compile_uboot() {
   log "Compiling U-Boot for $CHIP..."
@@ -123,10 +119,43 @@ compile_uboot() {
   make distclean
   make CROSS_COMPILE=aarch64-linux-gnu- "$UBOOT_DEFCONFIG" || error "Failed to configure U-Boot."
   make -j$(nproc) CROSS_COMPILE=aarch64-linux-gnu- BL31="$BL31" SCP="$SCP_BIN" || error "U-Boot compilation failed."
+
+  # Copy U-Boot outputs to OUT
   mkdir -p ../OUT
-  cp u-boot.bin ../OUT || error "Failed to copy U-Boot binary to OUT."
-  log "U-Boot compiled successfully."
+  if [ -f u-boot-sunxi-with-spl.bin ]; then
+    cp u-boot-sunxi-with-spl.bin ../OUT/ || error "Failed to copy u-boot-sunxi-with-spl.bin to OUT."
+    log "Copied u-boot-sunxi-with-spl.bin to OUT directory."
+  else
+    error "u-boot-sunxi-with-spl.bin not found after compilation."
+  fi
+
   cd - > /dev/null
+  log "U-Boot compiled and outputs copied to OUT directory."
+}
+
+# Copy DTS files
+copy_dts_files() {
+  log "Copying DTS files for $BOARD..."
+
+  # Define DTS mappings
+  case $BOARD in
+    ARM-SBC-RWA-A64) DTS_FILE="sun50i-a64-armsbc-rwa" ;;
+    ARM-SBC-RP-A40i) DTS_FILE="sun50i-a40i-armsbc-rp" ;;
+    ARM-SBC-RP-T527) DTS_FILE="sun50i-t527-armsbc-rp" ;;
+    ARM-SBC-XZ-A64) DTS_FILE="sun50i-a64-armsbc-xz" ;;
+    ARM-SBC-XZ-A20) DTS_FILE="sun7i-a20-armsbc-xz" ;;
+    *) error "No DTS mapping found for $BOARD." ;;
+  esac
+
+  DTS_PATH="linux-${KERNEL_VERSION}/arch/arm64/boot/dts/allwinner/$DTS_FILE.dtb"
+
+  if [ -f "$DTS_PATH" ]; then
+    mkdir -p OUT
+    cp "$DTS_PATH" OUT/ || error "Failed to copy DTS file $DTS_FILE to OUT directory."
+    log "Copied $DTS_FILE.dtb to OUT directory."
+  else
+    error "DTS file $DTS_PATH not found. Ensure kernel compilation generated the required DTS files."
+  fi
 }
 
 # Compile the kernel
@@ -137,12 +166,17 @@ compile_kernel() {
   make distclean
   make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- "$KERNEL_DEFCONFIG" || error "Failed to configure Linux kernel."
   make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) Image dtbs modules || error "Kernel compilation failed."
+
+  # Copy kernel outputs to OUT
   mkdir -p ../OUT
-  cp arch/arm64/boot/Image ../OUT || error "Failed to copy kernel image to OUT."
-  cp arch/arm64/boot/dts/allwinner/*.dtb ../OUT || error "Failed to copy DTS files to OUT."
+  if [ -f arch/arm64/boot/Image ]; then
+    cp arch/arm64/boot/Image ../OUT/ || error "Failed to copy Image to OUT."
+    log "Copied Image to OUT directory."
+  fi
   make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- INSTALL_MOD_PATH=../OUT modules_install || error "Failed to install kernel modules."
+
   cd - > /dev/null
-  log "Linux kernel compiled successfully."
+  log "Linux kernel compiled and outputs copied to OUT directory."
 }
 
 # Main script execution
@@ -153,4 +187,5 @@ compile_atf
 setup_crust_firmware
 compile_uboot
 compile_kernel
+copy_dts_files
 log "Compilation process completed successfully. All files are in the OUT directory."
