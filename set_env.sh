@@ -9,7 +9,7 @@ log() {
 # Function to install required packages
 install_packages() {
   log "Checking and installing required dependencies..."
-  REQUIRED_PACKAGES=("build-essential" "gcc" "make" "libssl-dev" "bison" "flex" "git" "wget" "bc" "python3" "python3-pip" "device-tree-compiler" "gcc-aarch64-linux-gnu" "g++-aarch64-linux-gnu")
+  REQUIRED_PACKAGES=("build-essential" "gcc" "make" "swig" "gcc-arm-linux-gnueabihf" "libssl-dev" "curl" "bison" "flex" "git" "wget" "bc" "python3" "libgnutls28-dev" "uuid-dev" "python3-pip" "device-tree-compiler" "gcc-aarch64-linux-gnu" "g++-aarch64-linux-gnu")
   MISSING_PACKAGES=()
 
   # Check each package
@@ -86,6 +86,7 @@ select_board() {
       echo "3) ARM-SBC-RP-T527"
       echo "4) ARM-SBC-XZ-A64"
       echo "5) ARM-SBC-XZ-A20"
+      echo "6) ARM-SBC-XZ-A83T"
       read -p "Enter the number corresponding to your Allwinner board: " BOARD_SELECTION
 
       case $BOARD_SELECTION in
@@ -94,6 +95,7 @@ select_board() {
         3) BOARD="ARM-SBC-RP-T527"; CHIP="t527"; UBOOT_DEFCONFIG="armsbc-rp-t527_defconfig"; KERNEL_DEFCONFIG="armsbc-t527_defconfig" ;;
         4) BOARD="ARM-SBC-XZ-A64"; CHIP="a64"; UBOOT_DEFCONFIG="armsbc-xz-a64_defconfig"; KERNEL_DEFCONFIG="armsbc-a64_defconfig" ;;
         5) BOARD="ARM-SBC-XZ-A20"; CHIP="a20"; UBOOT_DEFCONFIG="armsbc-xz-a20_defconfig"; KERNEL_DEFCONFIG="armsbc-a20_defconfig" ;;
+        6) BOARD="ARM-SBC-XZ-A83T"; CHIP="a83t"; UBOOT_DEFCONFIG="armsbc-xz-a83t_defconfig"; KERNEL_DEFCONFIG="armsbc-a83_defconfig" ;;
         *) log "[ERROR] Invalid Allwinner board selection. Please try again."; continue ;;
       esac
       break
@@ -254,7 +256,7 @@ download_kernel_source
 read -p $'\033[1;32m[STEP 7] Do you want to proceed with compiling? (y/n): \033[0m' CONTINUE_COMPILE
 if [[ "$CONTINUE_COMPILE" =~ ^[Yy]$ ]]; then
     # Determine the appropriate script for the selected board
-    if [[ "$CHIP" == "a64" || "$CHIP" == "a40i" ]]; then
+    if [[ "$CHIP" == "a64" || "$CHIP" == "a40i" || "$CHIP" == "a83t" || "$CHIP" == "t527" ]]; then
         SCRIPT="sunxi-compile.sh"
     else
         SCRIPT="rk-compile.sh"
