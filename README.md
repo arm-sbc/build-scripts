@@ -1,9 +1,6 @@
 # build-scripts
 
-
-
-![Logo](https://github.com/arm-sbc/binaries/blob/7b59689228f8e5c4b0a87133cb2e75092edb5262/logo1.png)
-
+![Logo](https://github.com/arm-sbc/binaries/blob/main/logo1.png)
 
 
 Firmware build script for ARM-SBC boards.
