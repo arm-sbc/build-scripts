@@ -1,9 +1,6 @@
 # build-scripts
 
-
 ![Logo](https://github.com/arm-sbc/binaries/blob/main/logo-1.png)
-
-
 Firmware build script for ARM-SBC boards.
 
 Plaese use ubuntu 22 for building.
