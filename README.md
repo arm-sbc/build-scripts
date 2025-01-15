@@ -2,16 +2,7 @@
 
 
 
-
-
 ![Logo](https://github.com/arm-sbc/binaries/blob/main/logo2.png)
-
-
-
-
-
-
-
 
 
 
