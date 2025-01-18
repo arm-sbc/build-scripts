@@ -9,7 +9,32 @@ log() {
 # Function to install required packages
 install_packages() {
   log "Checking and installing required dependencies..."
-  REQUIRED_PACKAGES=("build-essential" "gcc" "make" "swig" "gcc-arm-linux-gnueabihf" "libssl-dev" "curl" "bison" "flex" "git" "wget" "bc" "python3" "libgnutls28-dev" "uuid-dev" "python3-pip" "device-tree-compiler" "gcc-aarch64-linux-gnu" "g++-aarch64-linux-gnu")
+  REQUIRED_PACKAGES=(
+    "build-essential"
+    "gcc"
+    "gcc-arm-none-eabi"
+    "make"
+    "swig"
+    "gcc-arm-linux-gnueabihf"
+    "libssl-dev"
+    "curl"
+    "bison"
+    "flex"
+    "git"
+    "wget"
+    "bc"
+    "python3"
+    "libgnutls28-dev"
+    "uuid-dev"
+    "python3-pip"
+    "device-tree-compiler"
+    "gcc-aarch64-linux-gnu"
+    "g++-aarch64-linux-gnu"
+    "qemu"
+    "qemu-user"
+    "qemu-user-static"
+    "binfmt-support"
+  )
   MISSING_PACKAGES=()
 
   # Check each package
@@ -24,10 +49,45 @@ install_packages() {
     log "The following packages are missing and will be installed: ${MISSING_PACKAGES[*]}"
     sudo apt update
     sudo apt install -y "${MISSING_PACKAGES[@]}" || { log "[ERROR] Failed to install some packages. Exiting."; exit 1; }
-    log "All required packages have been installed."
+    log "All required system packages have been installed."
   else
-    log "All required dependencies are already installed."
+    log "All required system dependencies are already installed."
   fi
+
+  # Install Python packages
+  log "Checking and installing required Python packages..."
+  REQUIRED_PYTHON_PACKAGES=("pyelftools")
+  for pkg in "${REQUIRED_PYTHON_PACKAGES[@]}"; do
+    if ! python3 -m pip show "$pkg" > /dev/null 2>&1; then
+      log "Installing Python package: $pkg"
+      python3 -m pip install "$pkg" || { log "[ERROR] Failed to install Python package: $pkg. Exiting."; exit 1; }
+    else
+      log "Python package $pkg is already installed."
+    fi
+  done
+}
+
+# Function to set up QEMU for chroot
+setup_qemu() {
+  log "Setting up QEMU for chroot environment..."
+
+  # Ensure QEMU is registered for the target architecture
+  sudo update-binfmts --enable qemu-arm
+  sudo update-binfmts --enable qemu-aarch64
+
+  # Copy QEMU binary to rootfs if needed
+  if [ -d "/path/to/rootfs/usr/bin" ]; then
+    sudo cp /usr/bin/qemu-aarch64-static /path/to/rootfs/usr/bin/ || {
+      log "[ERROR] Failed to copy QEMU binary to rootfs. Exiting."
+      exit 1
+    }
+    log "QEMU binary successfully copied to rootfs."
+  else
+    log "[ERROR] Rootfs path does not exist or is invalid. Exiting."
+    exit 1
+  fi
+
+  log "QEMU setup complete for chroot environment."
 }
 
 
@@ -37,7 +97,6 @@ prepare_output_directory() {
   mkdir -p OUT || { log "[ERROR] Failed to create OUT directory."; exit 1; }
   log "Output directory prepared."
 }
-
 
 # Function to select board type and specific board
 select_board() {
@@ -49,6 +108,7 @@ select_board() {
 
     if [[ "$BOARD_TYPE" == "1" ]]; then
       echo "Rockchip board selected."
+      COMPILE_SCRIPT="./rk-compile.sh"  # Assign Rockchip compile script
       echo -e "\033[1;32mSelect a Rockchip board:\033[0m"
       echo "1- ARM-SBC-DCA-3288"
       echo "2- ARM-SBC-K2-3288"
@@ -80,6 +140,7 @@ select_board() {
       break
     elif [[ "$BOARD_TYPE" == "2" ]]; then
       echo "Allwinner board selected."
+      COMPILE_SCRIPT="./sunxi-compile.sh"  # Assign Allwinner compile script
       echo -e "\033[1;32mSelect an Allwinner board:\033[0m"
       echo "1) ARM-SBC-RWA-A64"
       echo "2) ARM-SBC-RP-A40i"
@@ -104,54 +165,66 @@ select_board() {
     fi
   done
 
-  export BOARD CHIP UBOOT_DEFCONFIG KERNEL_DEFCONFIG
+  export BOARD CHIP UBOOT_DEFCONFIG KERNEL_DEFCONFIG COMPILE_SCRIPT
   log "Selected board: $BOARD with chip: $CHIP"
+  log "Compile script set to: $COMPILE_SCRIPT"
 }
 
-# Function to download U-Boot and required binaries
+# Function to download sources dynamically based on the build option
 download_sources() {
-  log "Downloading U-Boot source..."
-  if [ ! -d "u-boot" ]; then
-    git clone https://github.com/u-boot/u-boot.git || { log "[ERROR] Failed to clone U-Boot repository."; exit 1; }
-  else
-    log "U-Boot source already exists. Skipping download."
-  fi
+  case "$BUILD_OPTION" in
+    "uboot"|"all")
+      log "Downloading U-Boot source..."
+      if [ ! -d "u-boot" ]; then
+        git clone https://github.com/u-boot/u-boot.git || { log "[ERROR] Failed to clone U-Boot repository."; exit 1; }
+      else
+        log "U-Boot source already exists. Skipping download."
+      fi
 
-  # Rockchip-specific downloads
-  if [[ "$CHIP" == "rk"* ]]; then
-    log "Downloading RKBin repository for Rockchip..."
-    if [ ! -d "rkbin" ]; then
-      git clone https://github.com/rockchip-linux/rkbin.git || { log "[ERROR] Failed to clone RKBin repository."; exit 1; }
-    else
-      log "RKBin repository already exists. Skipping download."
-    fi
+      # Rockchip-specific downloads for U-Boot
+      if [[ "$CHIP" == "rk"* ]]; then
+        log "Downloading RKBin repository for Rockchip..."
+        if [ ! -d "rkbin" ]; then
+          git clone https://github.com/rockchip-linux/rkbin.git || { log "[ERROR] Failed to clone RKBin repository."; exit 1; }
+        else
+          log "RKBin repository already exists. Skipping download."
+        fi
 
-    log "Downloading Trusted Firmware (ATF) for Rockchip..."
-    if [ ! -d "arm-trusted-firmware" ]; then
-      git clone https://github.com/ARM-software/arm-trusted-firmware.git || { log "[ERROR] Failed to clone ATF repository."; exit 1; }
-    else
-      log "Trusted Firmware source already exists. Skipping download."
-    fi
+        log "Downloading Trusted Firmware (ATF) for Rockchip..."
+        if [ ! -d "arm-trusted-firmware" ]; then
+          git clone https://github.com/ARM-software/arm-trusted-firmware.git || { log "[ERROR] Failed to clone ATF repository."; exit 1; }
+        else
+          log "ATF source already exists. Skipping download."
+        fi
 
-    log "Downloading OP-TEE for Rockchip..."
-    if [ ! -d "optee_os" ]; then
-      git clone https://github.com/OP-TEE/optee_os.git || { log "[ERROR] Failed to clone OP-TEE repository."; exit 1; }
-    else
-      log "OP-TEE source already exists. Skipping download."
-    fi
-  fi
+        log "Downloading OP-TEE for Rockchip..."
+        if [ ! -d "optee_os" ]; then
+          git clone https://github.com/OP-TEE/optee_os.git || { log "[ERROR] Failed to clone OP-TEE repository."; exit 1; }
+        else
+          log "OP-TEE source already exists. Skipping download."
+        fi
+      fi
 
-  # Allwinner-specific downloads-part of uboot
-  if [[ "$CHIP" == "a"* ]]; then
-    log "Downloading Trusted Firmware (ATF) for Allwinner..."
-    if [ ! -d "arm-trusted-firmware" ]; then
-      git clone https://github.com/ARM-software/arm-trusted-firmware.git || { log "[ERROR] Failed to clone ATF repository."; exit 1; }
-    else
-      log "Trusted Firmware source already exists. Skipping download."
-    fi
-  fi
+      # Allwinner-specific downloads for U-Boot
+      if [[ "$CHIP" == "a"* ]]; then
+        log "Downloading Trusted Firmware (ATF) for Allwinner..."
+        if [ ! -d "arm-trusted-firmware" ]; then
+          git clone https://github.com/ARM-software/arm-trusted-firmware.git || { log "[ERROR] Failed to clone ATF repository."; exit 1; }
+        else
+          log "ATF source already exists. Skipping download."
+        fi
+      fi
+      ;;
+    "kernel")
+      log "Kernel sources will be downloaded separately during kernel selection."
+      ;;
+    *)
+      log "[ERROR] Invalid or unsupported build option: $BUILD_OPTION"
+      exit 1
+      ;;
+  esac
 
-  log "All required sources for U-Boot and binaries downloaded successfully."
+  log "All required sources for the selected build option downloaded successfully."
 }
 
 #function to select kernel
@@ -243,45 +316,76 @@ download_kernel_source() {
   log "Kernel source downloaded and prepared."
 }
 
+# Function to provide build options
+build_options() {
+  log "Select the build option:"
+  PS3="Enter your choice: "
+  options=("U-Boot only" "Kernel only" "RootFS only" "All")
+  select opt in "${options[@]}"; do
+    case $opt in
+      "U-Boot only")
+        BUILD_OPTION="uboot"
+        KERNEL_VERSION="not-required"  # Placeholder value
+        ARCH="arm64"  # Set dynamically based on CHIP
+        export BOARD CHIP UBOOT_DEFCONFIG KERNEL_DEFCONFIG KERNEL_VERSION ARCH
+        log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, CHIP=$CHIP, ARCH=$ARCH"
+        download_sources
+        $COMPILE_SCRIPT uboot || { log "[ERROR] Failed to build U-Boot."; exit 1; }
+        break
+        ;;
+      "Kernel only")
+        BUILD_OPTION="kernel"
+        ARCH="arm64"  # Set dynamically based on CHIP
+        select_kernel_version
+        download_kernel_source
+        export BOARD CHIP UBOOT_DEFCONFIG KERNEL_DEFCONFIG KERNEL_VERSION ARCH
+        log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, CHIP=$CHIP, ARCH=$ARCH"
+        $COMPILE_SCRIPT kernel || { log "[ERROR] Failed to build Kernel."; exit 1; }
+        break
+        ;;
+      "RootFS only")
+        BUILD_OPTION="rootfs"
+        ARCH="arm64"  # Set dynamically based on CHIP
+        VERSION="jammy"  # Default value for RootFS (adjust if needed)
+        export BOARD ARCH VERSION
+        log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, ARCH=$ARCH, VERSION=$VERSION"
+        
+        # Ensure setup_rootfs.sh is executable and invoke it
+        if [ -x "./setup_rootfs.sh" ]; then
+          ./setup_rootfs.sh || { log "[ERROR] Failed to prepare RootFS."; exit 1; }
+        else
+          log "[ERROR] RootFS script setup_rootfs.sh not found or not executable."
+          exit 1
+        fi
+        break
+        ;;
+      "All")
+        BUILD_OPTION="all"
+        ARCH="arm64"  # Set dynamically based on CHIP
+        VERSION="jammy"  # Default value for RootFS (adjust if needed)
+        select_kernel_version
+        download_sources
+        download_kernel_source
+        export BOARD CHIP UBOOT_DEFCONFIG KERNEL_DEFCONFIG KERNEL_VERSION ARCH VERSION
+        log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, CHIP=$CHIP, ARCH=$ARCH, VERSION=$VERSION"
+        $COMPILE_SCRIPT all || { log "[ERROR] Failed to build all components."; exit 1; }
+        ./setup_rootfs.sh || { log "[ERROR] Failed to prepare RootFS."; exit 1; }
+        break
+        ;;
+      *)
+        log "Invalid option. Please try again."
+        ;;
+    esac
+  done
+}
+
 # Main script execution
 log "Starting script execution..."
 install_packages
 prepare_output_directory
 select_board
+build_options
 download_sources
 select_kernel_version
 download_kernel_source
-
-#Prompt for compilation
-read -p $'\033[1;32m[STEP 7] Do you want to proceed with compiling? (y/n): \033[0m' CONTINUE_COMPILE
-if [[ "$CONTINUE_COMPILE" =~ ^[Yy]$ ]]; then
-    # Determine the appropriate script for the selected board
-    if [[ "$CHIP" == "a64" || "$CHIP" == "a40i" || "$CHIP" == "a83t" || "$CHIP" == "t527" ]]; then
-        SCRIPT="sunxi-compile.sh"
-    else
-        SCRIPT="rk-compile.sh"
-    fi
-
-    # Check if the selected script exists, make it executable, and run it
-    if [ -f "./$SCRIPT" ]; then
-        chmod +x ./"$SCRIPT"
-        log "[STEP 7] Starting compilation with ./$SCRIPT..."
-        ./"$SCRIPT"
-        if [ $? -eq 0 ]; then
-            log "[INFO] Compilation completed successfully."
-        else
-            log "[ERROR] Compilation failed. Check the logs for details."
-            exit 1
-        fi
-    else
-        log "[ERROR] $SCRIPT not found in the current directory. Exiting."
-        exit 1
-    fi
-else
-    log "[STEP 7] Compilation skipped. Environment setup complete."
-    log "You can manually run the appropriate script when ready:"
-    log "  For Allwinner: ./sunxi-compile.sh"
-    log "  For Rockchip: ./rk-compile.sh"
-fi
-
 

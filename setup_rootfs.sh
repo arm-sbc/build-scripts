@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # Color Scheme
@@ -104,7 +103,7 @@ prepare_rootfs() {
 
 create_fresh_rootfs() {
     FRESH_DIR="OUT/fresh_$VERSION"
-    info "Preparing fresh rootfs in $FRESH_DIR..."
+    info "Preparing fresh rootfs in $FRESH_DIR for $BOARD ($ARCH)..."
 
     # Check if the directory already exists
     if [ -d "$FRESH_DIR" ]; then
@@ -132,7 +131,7 @@ create_fresh_rootfs() {
     info "Mounting $FRESH_DIR to $TEMP_MOUNT_DIR..."
     sudo mount --bind "$FRESH_DIR" "$TEMP_MOUNT_DIR" || { error "Failed to mount $FRESH_DIR to $TEMP_MOUNT_DIR."; exit 1; }
 
-    # Run debootstrap
+    # Run debootstrap based on architecture
     case $ARCH in
         arm32)
             info "Running debootstrap for armhf architecture..."
@@ -179,9 +178,8 @@ create_fresh_rootfs() {
 info "Select an option for rootfs creation:"
 echo -e "1. Download prebuilt rootfs from Linux Containers"
 echo -e "2. Create a fresh rootfs"
-echo -e "3. Download prebuilt image from ARM-SBC GitHub"
 
-prompt "Enter your choice (1/2/3):"
+prompt "Enter your choice (1/2):"
 read -r OPTION
 
 case $OPTION in
@@ -284,61 +282,11 @@ case $OPTION in
         esac
         create_fresh_rootfs
         ;;
-    3)
-        info "Downloading prebuilt rootfs image from ARM-SBC GitHub..."
-        echo -e "Select a distribution:"
-        echo -e "1. Ubuntu"
-        echo -e "2. Debian"
-        
-        prompt "Enter your choice (1/2):"
-        read -r DIST
-        
-        case $DIST in
-            1)
-                info "Selected Ubuntu. Choose a version:"
-                echo -e "1. Noble (24.04)"
-                echo -e "2. Jammy (22.04)"
-                echo -e "3. Focal (20.04)"
-                echo -e "4. Oracular (24.10)"
-                
-                prompt "Enter your choice (1/2/3/4):"
-                read -r UBUNTU_VERSION
-                case $UBUNTU_VERSION in
-                    1) VERSION="noble";;
-                    2) VERSION="jammy";;
-                    3) VERSION="focal";;
-                    4) VERSION="oracular";;
-                    *) error "Invalid Ubuntu version selected. Exiting."; exit 1;;
-                esac
-                ;;
-            2)
-                info "Selected Debian. Choose a version:"
-                echo -e "1. Bookworm"
-                echo -e "2. Bullseye"
-                echo -e "3. Trixie"
-                
-                prompt "Enter your choice (1/2/3):"
-                read -r DEBIAN_VERSION
-                case $DEBIAN_VERSION in
-                    1) VERSION="bookworm";;
-                    2) VERSION="bullseye";;
-                    3) VERSION="trixie";;
-                    *) error "Invalid Debian version selected. Exiting."; exit 1;;
-                esac
-                ;;
-            *)
-                error "Invalid distribution selected. Exiting."
-                exit 1
-                ;;
-        esac
-        info "Downloading prebuilt $VERSION rootfs for $ARCH from ARM-SBC GitHub..."
-        ;;
     *)
         error "Invalid option selected. Exiting."
         exit 1
         ;;
 esac
 
-info "Rootfs creation script completed successfully. To create SD card/eMMC images plaese run ./mk-image.sh"
-
+info "Rootfs creation script completed successfully. To create SD card/eMMC images please run ./mk-image.sh"
 
