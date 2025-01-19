@@ -25,7 +25,7 @@
 +
 --- arch/arm/dts/Makefile	2025-01-14 18:00:10.023604988 +0400
 +++ arch/arm/dts/Makefile	2025-01-14 18:36:36.706399875 +0400
-@@ -719,6 +719,7 @@
+@@ -722,6 +722,7 @@
  	sun50i-h6-tanix-tx6-mini.dtb
  dtb-$(CONFIG_MACH_SUN50I) += \
  	sun50i-a64-amarula-relic.dtb \

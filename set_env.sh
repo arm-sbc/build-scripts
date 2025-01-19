@@ -24,7 +24,9 @@ install_packages() {
     "wget"
     "bc"
     "python3"
+    "libncurses-dev"
     "libgnutls28-dev"
+    "libncurses-dev"
     "uuid-dev"
     "python3-pip"
     "device-tree-compiler"
@@ -113,28 +115,20 @@ select_board() {
       echo "1- ARM-SBC-DCA-3288"
       echo "2- ARM-SBC-K2-3288"
       echo "3- ARM-SBC-DCA-3399"
-      echo "4- ARM-SBC-XZ-3399"
-      echo "5- ARM-SBC-DCA-3566"
-      echo "6- ARM-SBC-DCA-3568"
-      echo "7- ARM-SBC-EDG-3576"
-      echo "8- ARM-SBC-NANO-3568"
-      echo "9- ARM-SBC-DCA-3588"
-      echo "10- ARM-SBC-EDGE-3588"
-      echo "11- ARM-SBC-RWA-3588"
+      echo "4- ARM-SBC-DCA-3566"
+      echo "5- ARM-SBC-DCA-3568"
+      echo "6- ARM-SBC-EDG-3576"
+      echo "7- ARM-SBC-NANO-3568"
+      echo "8- ARM-SBC-DCA-3588"
+      echo "9- ARM-SBC-EDGE-3588"
+      echo "10- ARM-SBC-RWA-3588"
       read -p "Enter the number corresponding to your Rockchip board: " BOARD_SELECTION
 
       case $BOARD_SELECTION in
-        1) BOARD="ARM-SBC-DCA-3288"; CHIP="rk3288"; UBOOT_DEFCONFIG="armsbc-dca-3288_defconfig"; KERNEL_DEFCONFIG="armsbc-3288_defconfig" ;;
-        2) BOARD="ARM-SBC-K2-3288"; CHIP="rk3288"; UBOOT_DEFCONFIG="armsbc-k2-3288_defconfig"; KERNEL_DEFCONFIG="armsbc-3288_defconfig" ;;
-        3) BOARD="ARM-SBC-DCA-3399"; CHIP="rk3399"; UBOOT_DEFCONFIG="armsbc-dca-3399_defconfig"; KERNEL_DEFCONFIG="armsbc-3399_defconfig" ;;
-        4) BOARD="ARM-SBC-XZ-3399"; CHIP="rk3399"; UBOOT_DEFCONFIG="armsbc-xz-3399_defconfig"; KERNEL_DEFCONFIG="armsbc-3399_defconfig" ;;
-        5) BOARD="ARM-SBC-DCA-3566"; CHIP="rk3566"; UBOOT_DEFCONFIG="armsbc-dca-3566_defconfig"; KERNEL_DEFCONFIG="armsbc-3566_defconfig" ;;
-        6) BOARD="ARM-SBC-DCA-3568"; CHIP="rk3568"; UBOOT_DEFCONFIG="armsbc-dca-3568_defconfig"; KERNEL_DEFCONFIG="armsbc-3568_defconfig" ;;
-        7) BOARD="ARM-SBC-EDG-3576"; CHIP="rk3576"; UBOOT_DEFCONFIG="armsbc-edg-3576_defconfig"; KERNEL_DEFCONFIG="armsbc-3576_defconfig" ;;
-        8) BOARD="ARM-SBC-NANO-3568"; CHIP="rk3568"; UBOOT_DEFCONFIG="armsbc-nano-3568_defconfig"; KERNEL_DEFCONFIG="armsbc-3568_defconfig" ;;
-        9) BOARD="ARM-SBC-DCA-3588"; CHIP="rk3588"; UBOOT_DEFCONFIG="armsbc-dca-3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig" ;;
-        10) BOARD="ARM-SBC-EDGE-3588"; CHIP="rk3588"; UBOOT_DEFCONFIG="armsbc-edge-3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig" ;;
-        11) BOARD="ARM-SBC-RWA-3588"; CHIP="rk3588"; UBOOT_DEFCONFIG="armsbc-rwa-3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig" ;;
+        1) BOARD="ARM-SBC-DCA-3288"; CHIP="rk3288"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-dca-3288_defconfig"; KERNEL_DEFCONFIG="armsbc-3288_defconfig"; DEVICE_TREE="rk3288-armsbc-dca.dts" ;;
+        2) BOARD="ARM-SBC-K2-3288"; CHIP="rk3288"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-k2-3288_defconfig"; KERNEL_DEFCONFIG="armsbc-3288_defconfig"; DEVICE_TREE="rk3288-armsbc-k2.dts" ;;
+        3) BOARD="ARM-SBC-DCA-3399"; CHIP="rk3399"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-dca-3399_defconfig"; KERNEL_DEFCONFIG="armsbc-3399_defconfig"; DEVICE_TREE="rk3399-armsbc-dca.dts" ;;
+        # Additional boards here...
         *) log "[ERROR] Invalid Rockchip board selection. Please try again."; continue ;;
       esac
       break
@@ -151,12 +145,12 @@ select_board() {
       read -p "Enter the number corresponding to your Allwinner board: " BOARD_SELECTION
 
       case $BOARD_SELECTION in
-        1) BOARD="ARM-SBC-RWA-A64"; CHIP="a64"; UBOOT_DEFCONFIG="armsbc-rwa-a64_defconfig"; KERNEL_DEFCONFIG="armsbc-a64_defconfig" ;;
-        2) BOARD="ARM-SBC-RP-A40i"; CHIP="a40i"; UBOOT_DEFCONFIG="armsbc-rp-a40i_defconfig"; KERNEL_DEFCONFIG="armsbc-a40i_defconfig" ;;
-        3) BOARD="ARM-SBC-RP-T527"; CHIP="t527"; UBOOT_DEFCONFIG="armsbc-rp-t527_defconfig"; KERNEL_DEFCONFIG="armsbc-t527_defconfig" ;;
-        4) BOARD="ARM-SBC-XZ-A64"; CHIP="a64"; UBOOT_DEFCONFIG="armsbc-xz-a64_defconfig"; KERNEL_DEFCONFIG="armsbc-a64_defconfig" ;;
-        5) BOARD="ARM-SBC-XZ-A20"; CHIP="a20"; UBOOT_DEFCONFIG="armsbc-xz-a20_defconfig"; KERNEL_DEFCONFIG="armsbc-a20_defconfig" ;;
-        6) BOARD="ARM-SBC-XZ-A83T"; CHIP="a83t"; UBOOT_DEFCONFIG="armsbc-xz-a83t_defconfig"; KERNEL_DEFCONFIG="armsbc-a83_defconfig" ;;
+        1) BOARD="ARM-SBC-RWA-A64"; CHIP="a64"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rwa-a64_defconfig"; KERNEL_DEFCONFIG="armsbc-a64_defconfig"; DEVICE_TREE="sun50i-a64-armsbc-rwa.dts" ;;
+        2) BOARD="ARM-SBC-RP-A40i"; CHIP="a40i"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-rp-a40i_defconfig"; KERNEL_DEFCONFIG="armsbc-a40i_defconfig"; DEVICE_TREE="sun8i-a40i-armsbc-rp.dts" ;;
+        3) BOARD="ARM-SBC-RP-T527"; CHIP="t527"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rp-t527_defconfig"; KERNEL_DEFCONFIG="armsbc-t527_defconfig"; DEVICE_TREE="sun55i-t527-armsbc-rp.dts" ;;
+        4) BOARD="ARM-SBC-XZ-A64"; CHIP="a64"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-xz-a64_defconfig"; KERNEL_DEFCONFIG="armsbc-a64_defconfig"; DEVICE_TREE="sun50i-a64-armsbc-xz.dts" ;;
+        5) BOARD="ARM-SBC-XZ-A20"; CHIP="a20"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-xz-a20_defconfig"; KERNEL_DEFCONFIG="armsbc-a20_defconfig"; DEVICE_TREE="sun7i-a20-armsbc-xz.dts" ;;
+        6) BOARD="ARM-SBC-XZ-A83T"; CHIP="a83t"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-xz-a83t_defconfig"; KERNEL_DEFCONFIG="armsbc-a83_defconfig"; DEVICE_TREE="sun8i-a83t-armsbc-xz.dts" ;;
         *) log "[ERROR] Invalid Allwinner board selection. Please try again."; continue ;;
       esac
       break
@@ -165,9 +159,11 @@ select_board() {
     fi
   done
 
-  export BOARD CHIP UBOOT_DEFCONFIG KERNEL_DEFCONFIG COMPILE_SCRIPT
+  export BOARD CHIP ARCH CROSS_COMPILE UBOOT_DEFCONFIG KERNEL_DEFCONFIG DEVICE_TREE COMPILE_SCRIPT
   log "Selected board: $BOARD with chip: $CHIP"
+  log "Detected architecture: $ARCH, Cross-compiler: $CROSS_COMPILE"
   log "Compile script set to: $COMPILE_SCRIPT"
+  log "Device Tree file: $DEVICE_TREE"
 }
 
 # Function to download sources dynamically based on the build option
@@ -177,6 +173,19 @@ download_sources() {
       log "Downloading U-Boot source..."
       if [ ! -d "u-boot" ]; then
         git clone https://github.com/u-boot/u-boot.git || { log "[ERROR] Failed to clone U-Boot repository."; exit 1; }
+        cd u-boot || { log "[ERROR] Failed to enter U-Boot directory."; exit 1; }
+        # Fetch all tags and determine the latest stable version
+        log "Fetching U-Boot tags to determine the latest stable version..."
+        git fetch --tags || { log "[ERROR] Failed to fetch tags from U-Boot repository."; exit 1; }
+        STABLE_TAG=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+        
+        if [ -z "$STABLE_TAG" ]; then
+          log "[ERROR] Failed to determine the latest stable version of U-Boot. Falling back to the main branch."
+        else
+          log "Latest stable U-Boot version determined: $STABLE_TAG"
+          git checkout -b "$STABLE_TAG-branch" "$STABLE_TAG" || { log "[ERROR] Failed to checkout U-Boot stable version $STABLE_TAG."; exit 1; }
+        fi
+        cd - > /dev/null
       else
         log "U-Boot source already exists. Skipping download."
       fi
@@ -227,7 +236,7 @@ download_sources() {
   log "All required sources for the selected build option downloaded successfully."
 }
 
-#function to select kernel
+# Function to select kernel version
 select_kernel_version() {
   # Check if the selected board is Allwinner
   if [[ "$CHIP" == "a"* ]]; then
@@ -242,11 +251,14 @@ select_kernel_version() {
 
     KERNEL_VERSION="$LATEST_KERNEL"
     KERNEL_SOURCE="https://cdn.kernel.org/pub/linux/kernel/v${LATEST_KERNEL%%.*}.x/linux-${LATEST_KERNEL}.tar.xz"
+    COMPILE_SCRIPT="./sunxi-compile.sh"  # Correct script for Allwinner boards
     log "[INFO] Automatically selected latest stable kernel version: $KERNEL_VERSION"
     log "[INFO] Kernel source URL: $KERNEL_SOURCE"
-    export KERNEL_VERSION KERNEL_SOURCE
-  else
-    echo -e "\033[1;32mSelect the kernel version to use:\033[0m"  # Green for prompts
+    log "[INFO] Compile script set to: $COMPILE_SCRIPT"
+    export KERNEL_VERSION KERNEL_SOURCE COMPILE_SCRIPT
+
+  elif [[ "$CHIP" == "rk3588" || "$CHIP" == "rk3576" ]]; then
+    echo -e "\033[1;32mSelect the kernel version to use for $CHIP:\033[0m"  # Green for prompts
     echo "1- Legacy kernel (6.1.75)"
     echo "2- Latest upstream kernel"
     read -p $'\033[1;32mEnter the number corresponding to your selection: \033[0m' KERNEL_SELECTION
@@ -255,6 +267,7 @@ select_kernel_version() {
       1)
         KERNEL_VERSION="6.1.75"
         KERNEL_SOURCE="https://github.com/arm-sbc/rk-kernel-6.1.75.git"
+        COMPILE_SCRIPT="./rk-legacy-compile.sh"  # Point to the legacy compile script
         ;;
       2)
         log "Fetching the latest kernel version dynamically..."
@@ -265,6 +278,7 @@ select_kernel_version() {
         fi
         KERNEL_VERSION="$LATEST_KERNEL"
         KERNEL_SOURCE="https://cdn.kernel.org/pub/linux/kernel/v${LATEST_KERNEL%%.*}.x/linux-${LATEST_KERNEL}.tar.xz"
+        COMPILE_SCRIPT="./rk-compile.sh"  # Correct script for Rockchip
         ;;
       *)
         echo -e "\033[1;31mInvalid selection.\033[0m"; exit 1 ;;  # Red for errors
@@ -272,7 +286,25 @@ select_kernel_version() {
 
     log "[INFO] Selected kernel version: $KERNEL_VERSION"
     log "[INFO] Kernel source: $KERNEL_SOURCE"
-    export KERNEL_VERSION KERNEL_SOURCE
+    log "[INFO] Compile script set to: $COMPILE_SCRIPT"
+    export KERNEL_VERSION KERNEL_SOURCE COMPILE_SCRIPT
+
+  else
+    log "Automatically selecting the latest stable kernel for $CHIP..."
+    LATEST_KERNEL=$(curl -s https://www.kernel.org/ | grep -oP 'linux-[0-9]+\.[0-9]+\.[0-9]+(?=\.tar\.xz)' | grep -v -E 'rc|rc[0-9]+' | head -n 1 | sed 's/linux-//')
+
+    if [ -z "$LATEST_KERNEL" ]; then
+      log "[ERROR] Failed to fetch the latest stable kernel version from kernel.org. Exiting."
+      exit 1
+    fi
+
+    KERNEL_VERSION="$LATEST_KERNEL"
+    KERNEL_SOURCE="https://cdn.kernel.org/pub/linux/kernel/v${LATEST_KERNEL%%.*}.x/linux-${LATEST_KERNEL}.tar.xz"
+    COMPILE_SCRIPT="./rk-compile.sh"  # Default compile script for other Rockchip boards
+    log "[INFO] Automatically selected latest stable kernel version: $KERNEL_VERSION"
+    log "[INFO] Kernel source URL: $KERNEL_SOURCE"
+    log "[INFO] Compile script set to: $COMPILE_SCRIPT"
+    export KERNEL_VERSION KERNEL_SOURCE COMPILE_SCRIPT
   fi
 }
 
@@ -316,7 +348,6 @@ download_kernel_source() {
   log "Kernel source downloaded and prepared."
 }
 
-# Function to provide build options
 build_options() {
   log "Select the build option:"
   PS3="Enter your choice: "
@@ -325,32 +356,27 @@ build_options() {
     case $opt in
       "U-Boot only")
         BUILD_OPTION="uboot"
-        KERNEL_VERSION="not-required"  # Placeholder value
-        ARCH="arm64"  # Set dynamically based on CHIP
-        export BOARD CHIP UBOOT_DEFCONFIG KERNEL_DEFCONFIG KERNEL_VERSION ARCH
-        log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, CHIP=$CHIP, ARCH=$ARCH"
+        export BOARD CHIP ARCH CROSS_COMPILE UBOOT_DEFCONFIG KERNEL_DEFCONFIG
+        log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, CHIP=$CHIP, ARCH=$ARCH, CROSS_COMPILE=$CROSS_COMPILE"
         download_sources
         $COMPILE_SCRIPT uboot || { log "[ERROR] Failed to build U-Boot."; exit 1; }
         break
         ;;
       "Kernel only")
         BUILD_OPTION="kernel"
-        ARCH="arm64"  # Set dynamically based on CHIP
         select_kernel_version
         download_kernel_source
-        export BOARD CHIP UBOOT_DEFCONFIG KERNEL_DEFCONFIG KERNEL_VERSION ARCH
-        log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, CHIP=$CHIP, ARCH=$ARCH"
+        export BOARD CHIP ARCH CROSS_COMPILE KERNEL_VERSION UBOOT_DEFCONFIG KERNEL_DEFCONFIG
+        log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, CHIP=$CHIP, ARCH=$ARCH, CROSS_COMPILE=$CROSS_COMPILE, KERNEL_VERSION=$KERNEL_VERSION"
         $COMPILE_SCRIPT kernel || { log "[ERROR] Failed to build Kernel."; exit 1; }
         break
         ;;
       "RootFS only")
         BUILD_OPTION="rootfs"
-        ARCH="arm64"  # Set dynamically based on CHIP
-        VERSION="jammy"  # Default value for RootFS (adjust if needed)
+        VERSION="jammy"  # Default RootFS version (adjustable)
         export BOARD ARCH VERSION
         log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, ARCH=$ARCH, VERSION=$VERSION"
         
-        # Ensure setup_rootfs.sh is executable and invoke it
         if [ -x "./setup_rootfs.sh" ]; then
           ./setup_rootfs.sh || { log "[ERROR] Failed to prepare RootFS."; exit 1; }
         else
@@ -361,15 +387,23 @@ build_options() {
         ;;
       "All")
         BUILD_OPTION="all"
-        ARCH="arm64"  # Set dynamically based on CHIP
-        VERSION="jammy"  # Default value for RootFS (adjust if needed)
         select_kernel_version
         download_sources
         download_kernel_source
-        export BOARD CHIP UBOOT_DEFCONFIG KERNEL_DEFCONFIG KERNEL_VERSION ARCH VERSION
-        log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, CHIP=$CHIP, ARCH=$ARCH, VERSION=$VERSION"
-        $COMPILE_SCRIPT all || { log "[ERROR] Failed to build all components."; exit 1; }
-        ./setup_rootfs.sh || { log "[ERROR] Failed to prepare RootFS."; exit 1; }
+        export BOARD CHIP ARCH CROSS_COMPILE KERNEL_VERSION UBOOT_DEFCONFIG KERNEL_DEFCONFIG VERSION="jammy"
+        log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, CHIP=$CHIP, ARCH=$ARCH, CROSS_COMPILE=$CROSS_COMPILE, KERNEL_VERSION=$KERNEL_VERSION, VERSION=$VERSION"
+        
+        if ! $COMPILE_SCRIPT all; then
+          log "[ERROR] Failed to build all components."
+          exit 1
+        fi
+
+        if [ -x "./setup_rootfs.sh" ]; then
+          ./setup_rootfs.sh || { log "[ERROR] Failed to prepare RootFS."; exit 1; }
+        else
+          log "[ERROR] RootFS script setup_rootfs.sh not found or not executable."
+          exit 1
+        fi
         break
         ;;
       *)
@@ -385,7 +419,5 @@ install_packages
 prepare_output_directory
 select_board
 build_options
-download_sources
-select_kernel_version
-download_kernel_source
+
 
