@@ -39,11 +39,6 @@ apply_patches() {
   if [[ "$BUILD_OPTION" == "uboot" || "$BUILD_OPTION" == "all" ]]; then
     PATCH_DIRS+=("patches/sunxi/uboot")
   fi
-
-  if [[ "$BUILD_OPTION" == "kernel" || "$BUILD_OPTION" == "all" ]]; then
-    PATCH_DIRS+=("patches/sunxi/kernel")
-  fi
-
   for dir in "${PATCH_DIRS[@]}"; do
     if [ -d "$dir" ]; then
       log "Applying patches from $dir..."
@@ -161,11 +156,22 @@ compile_kernel() {
   log "Generating kernel configuration from defconfig..."
   make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" olddefconfig || error "Failed to configure kernel."
 
-  # Verify the .config file
+  # Prompt for running menuconfig
+  echo -e "\033[1;33mDo you want to modify the kernel configuration using menuconfig? [y/N]:\033[0m"
+  read -r RUN_MENUCONFIG
+  if [[ "$RUN_MENUCONFIG" =~ ^[Yy]$ ]]; then
+    log "Launching menuconfig..."
+    make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" menuconfig || error "menuconfig failed."
+    log "menuconfig completed. Continuing with kernel compilation..."
+  else
+    log "Skipping menuconfig."
+  fi
+
+  # Copy the updated .config to the OUT directory
+  CONFIG_OUTPUT="../OUT/config-$KERNEL_VERSION"
   if [ -f ".config" ]; then
-    CONFIG_OUTPUT="../OUT/config-$KERNEL_VERSION"
-    cp .config "$CONFIG_OUTPUT" || error "Failed to copy .config to $CONFIG_OUTPUT"
-    log "Copied kernel configuration to $CONFIG_OUTPUT"
+    cp .config "$CONFIG_OUTPUT" || error "Failed to copy updated .config to $CONFIG_OUTPUT"
+    log "Copied updated kernel configuration to $CONFIG_OUTPUT"
   else
     error ".config file not found after kernel configuration."
   fi
@@ -210,39 +216,28 @@ compile_kernel() {
     warn "DTS file for selected board not found: $BOARD_DTS. Skipping DTS compilation."
   fi
 
-# Copy the kernel image, .config, and System.map to OUT directory
-KERNEL_IMAGE_PATH="arch/$ARCH/boot/$KERNEL_IMAGE_TYPE"
-CONFIG_OUTPUT="../OUT/config-$KERNEL_VERSION"
-SYSTEM_MAP_OUTPUT="../OUT/System.map-$KERNEL_VERSION"
+  # Copy the kernel image, .config, and System.map to OUT directory
+  KERNEL_IMAGE_PATH="arch/$ARCH/boot/$KERNEL_IMAGE_TYPE"
+  SYSTEM_MAP_OUTPUT="../OUT/System.map-$KERNEL_VERSION"
 
-mkdir -p ../OUT
+  # Copy kernel image
+  if [ -f "$KERNEL_IMAGE_PATH" ]; then
+    cp "$KERNEL_IMAGE_PATH" ../OUT/ || error "Failed to copy kernel image to OUT directory."
+    log "Copied kernel image ($KERNEL_IMAGE_PATH) to OUT directory."
+  else
+    error "Kernel image not found: $KERNEL_IMAGE_PATH"
+  fi
 
-# Copy kernel image
-if [ -f "$KERNEL_IMAGE_PATH" ]; then
-  cp "$KERNEL_IMAGE_PATH" ../OUT/ || error "Failed to copy kernel image to OUT directory."
-  log "Copied kernel image ($KERNEL_IMAGE_PATH) to OUT directory."
-else
-  error "Kernel image not found: $KERNEL_IMAGE_PATH"
-fi
+  # Copy System.map as System.map-$KERNEL_VERSION
+  if [ -f "System.map" ]; then
+    cp System.map "$SYSTEM_MAP_OUTPUT" || error "Failed to copy System.map to $SYSTEM_MAP_OUTPUT"
+    log "Copied System.map to $SYSTEM_MAP_OUTPUT"
+  else
+    warn "System.map file not found. Skipping System.map copy."
+  fi
 
-# Copy .config file as config-$KERNEL_VERSION
-if [ -f ".config" ]; then
-  cp .config "$CONFIG_OUTPUT" || error "Failed to copy .config to $CONFIG_OUTPUT"
-  log "Copied kernel configuration to $CONFIG_OUTPUT"
-else
-  warn ".config file not found. Skipping .config copy."
-fi
-
-# Copy System.map as System.map-$KERNEL_VERSION
-if [ -f "System.map" ]; then
-  cp System.map "$SYSTEM_MAP_OUTPUT" || error "Failed to copy System.map to $SYSTEM_MAP_OUTPUT"
-  log "Copied System.map to $SYSTEM_MAP_OUTPUT"
-else
-  warn "System.map file not found. Skipping System.map copy."
-fi
-
-log "Kernel, modules, configuration, and board-specific DTB compiled and copied successfully."
-cd ..
+  log "Kernel, modules, configuration, and board-specific DTB compiled and copied successfully."
+  cd ..
 }
 
 # Main script execution based on input argument
