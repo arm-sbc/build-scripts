@@ -184,37 +184,70 @@ compile_kernel() {
   make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" INSTALL_MOD_PATH="$MODULES_OUT_DIR" modules_install || error "Failed to install modules."
   log "Kernel modules installed to $MODULES_OUT_DIR."
 
-  # DTS Compilation
-  if [ -f "$BOARD_DTS" ]; then
-    cp "$BOARD_DTS" "$DTS_PATH/" || error "Failed to copy DTS file to kernel directory."
-    log "DTS file copied: $BOARD_DTS"
+# Function to compile DTS files for Rockchip boards
+compile_dts() {
+  log "Starting DTS compilation for Rockchip boards..."
 
-    # Add entry to the Makefile for the DTS
-    DTS_ENTRY="dtb-\$(CONFIG_ARCH_ROCKCHIP) += $(basename "${BOARD_DTS%.dts}.dtb")"
-    if ! grep -q "$(basename "${BOARD_DTS%.dts}.dtb")" "$DTS_MAKEFILE"; then
-      echo "$DTS_ENTRY" >> "$DTS_MAKEFILE"
-      log "Added entry to DTS Makefile: $DTS_ENTRY"
-    fi
+  # Resolve the absolute script directory
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-    # Compile the DTB using kernel build system
-    log "Compiling DTS file using kernel build system..."
-    make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" dtbs || error "Failed to compile DTBs."
-
-    # Verify the DTB file
-    GENERATED_DTB="$DTS_PATH/$(basename "${BOARD_DTS%.dts}.dtb")"
-    if [ -f "$GENERATED_DTB" ]; then
-      mv "$GENERATED_DTB" "$COMPILED_DTB_PATH" || error "Failed to move DTB file to OUT directory."
-      log "DTB file moved to OUT directory: $COMPILED_DTB_PATH"
-    else
-      error "DTB file not created: $GENERATED_DTB"
-    fi
-
-    # Clean up Makefile entry
-    sed -i "/$(basename "${BOARD_DTS%.dts}.dtb")/d" "$DTS_MAKEFILE"
-    log "Temporary DTS Makefile entry removed."
-  else
-    warn "DTS file for selected board not found: $BOARD_DTS. Skipping DTS compilation."
+  # Ensure DEVICE_TREE and ARCH are set
+  if [ -z "$DEVICE_TREE" ] || [ -z "$ARCH" ]; then
+    error "DEVICE_TREE or ARCH is not set. Ensure both variables are properly configured."
   fi
+
+  # Determine DTS source directory based on architecture
+  if [ "$ARCH" = "arm64" ]; then
+    DTS_SOURCE_DIR="$SCRIPT_DIR/custom_configs/dts/rockchip/arm64"
+    DTS_PATH="$SCRIPT_DIR/linux-${KERNEL_VERSION}/arch/arm64/boot/dts/armsbc"
+    DTS_MAIN_MAKEFILE="$SCRIPT_DIR/linux-${KERNEL_VERSION}/arch/arm64/boot/dts/Makefile"
+  elif [ "$ARCH" = "arm" ]; then
+    DTS_SOURCE_DIR="$SCRIPT_DIR/custom_configs/dts/rockchip/arm32"
+    DTS_PATH="$SCRIPT_DIR/linux-${KERNEL_VERSION}/arch/arm/boot/dts/armsbc"
+    DTS_MAIN_MAKEFILE="$SCRIPT_DIR/linux-${KERNEL_VERSION}/arch/arm/boot/dts/Makefile"
+  else
+    error "Unsupported architecture: $ARCH for Rockchip boards."
+  fi
+
+  # Verify the DTS source directory
+  if [ ! -d "$DTS_SOURCE_DIR" ]; then
+    error "DTS source directory not found: $DTS_SOURCE_DIR. Ensure the directory exists."
+  fi
+
+  # Create the armsbc directory if it doesn't exist
+  if [ ! -d "$DTS_PATH" ]; then
+    log "Creating DTS directory: $DTS_PATH"
+    mkdir -p "$DTS_PATH" || error "Failed to create DTS directory: $DTS_PATH"
+  fi
+
+  # Copy all files from the source directory to the kernel DTS directory
+  log "Copying all DTS files to kernel DTS directory: $DTS_PATH"
+  cp -r "$DTS_SOURCE_DIR/"* "$DTS_PATH/" || error "Failed to copy DTS files to $DTS_PATH."
+  log "All DTS files copied from $DTS_SOURCE_DIR to $DTS_PATH"
+
+  # Add the 'armsbc' entry to the main DTS Makefile
+  if ! grep -q "subdir-y += armsbc" "$DTS_MAIN_MAKEFILE"; then
+    echo "subdir-y += armsbc" >> "$DTS_MAIN_MAKEFILE"
+    log "Added 'subdir-y += armsbc' to $DTS_MAIN_MAKEFILE"
+  fi
+
+  # Compile the DTB using the kernel build system
+  log "Compiling DTS files using kernel build system..."
+  cd "$SCRIPT_DIR/linux-${KERNEL_VERSION}" || error "Failed to enter kernel source directory."
+  make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" dtbs || error "Failed to compile DTBs."
+
+  # Verify and move the generated DTB file
+  GENERATED_DTB="$DTS_PATH/$(basename "${DEVICE_TREE%.dts}.dtb")"
+  if [ -f "$GENERATED_DTB" ]; then
+    log "Generated DTB file: $GENERATED_DTB"
+    mv "$GENERATED_DTB" "$SCRIPT_DIR/OUT/" || error "Failed to move DTB file to OUT directory."
+    log "DTB file moved to OUT directory: $SCRIPT_DIR/OUT/$(basename "$GENERATED_DTB")"
+  else
+    error "DTB file not created: $GENERATED_DTB"
+  fi
+
+  log "DTS compilation completed successfully for Rockchip boards."
+}
 
   # Copy the kernel image, .config, and System.map to OUT directory
   KERNEL_IMAGE_PATH="arch/$ARCH/boot/$KERNEL_IMAGE_TYPE"
@@ -236,7 +269,7 @@ compile_kernel() {
     warn "System.map file not found. Skipping System.map copy."
   fi
 
-  log "Kernel, modules, configuration, and board-specific DTB compiled and copied successfully."
+  log "Kernel, modules, configuration, compiled and copied successfully."
   cd ..
 }
 
@@ -252,6 +285,7 @@ case "$1" in
   kernel)
     check_cross_compiler
     compile_kernel
+    compile_dts
     ;;
   all)
     check_cross_compiler
@@ -260,6 +294,7 @@ case "$1" in
     compile_optee
     compile_uboot
     compile_kernel
+    compile_dts
     ;;
   *)
     error "Invalid argument. Use 'uboot', 'kernel', or 'all'."

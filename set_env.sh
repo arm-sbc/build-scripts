@@ -96,8 +96,19 @@ setup_qemu() {
 # Function to prepare the output directory
 prepare_output_directory() {
   log "Preparing output directory..."
-  mkdir -p OUT || { log "[ERROR] Failed to create OUT directory."; exit 1; }
-  log "Output directory prepared."
+
+  # Check if the OUT directory exists
+  if [ -d "OUT" ]; then
+    log "OUT directory exists. Cleaning its contents..."
+    rm -rf OUT/* || { log "[ERROR] Failed to clean OUT directory."; exit 1; }
+    log "OUT directory cleaned."
+  else
+    log "OUT directory does not exist. Creating it..."
+    mkdir -p OUT || { log "[ERROR] Failed to create OUT directory."; exit 1; }
+    log "OUT directory created."
+  fi
+
+  log "Output directory is ready."
 }
 
 # Function to select board type and specific board

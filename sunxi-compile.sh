@@ -228,74 +228,69 @@ compile_kernel() {
   cd - >/dev/null
 }
 
-# Function to compile DTS files
+# Function to compile DTS files for Sunxi/Allwinner boards
 compile_dts() {
-  log "Compiling DTS for $DEVICE_TREE..."
+  log "Starting DTS compilation for Allwinner boards..."
 
-  # Ensure DEVICE_TREE is set
-  if [ -z "$DEVICE_TREE" ]; then
-    error "DEVICE_TREE is not set. Ensure it is exported before running the script."
+  # Resolve the absolute script directory
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+  # Ensure DEVICE_TREE and ARCH are set
+  if [ -z "$DEVICE_TREE" ] || [ -z "$ARCH" ]; then
+    error "DEVICE_TREE or ARCH is not set. Ensure both variables are properly configured."
   fi
 
-  # Define DTS path based on architecture
+  # Determine DTS source directory based on architecture
   if [ "$ARCH" = "arm64" ]; then
-    DTS_PATH="arch/arm64/boot/dts/allwinner"
+    DTS_SOURCE_DIR="$SCRIPT_DIR/custom_configs/dts/sunxi/arm64"
+    DTS_PATH="$SCRIPT_DIR/linux-${KERNEL_VERSION}/arch/arm64/boot/dts/armsbc"
+    DTS_MAIN_MAKEFILE="$SCRIPT_DIR/linux-${KERNEL_VERSION}/arch/arm64/boot/dts/Makefile"
   elif [ "$ARCH" = "arm" ]; then
-    DTS_PATH="arch/arm/boot/dts/allwinner"
+    DTS_SOURCE_DIR="$SCRIPT_DIR/custom_configs/dts/sunxi/arm32"
+    DTS_PATH="$SCRIPT_DIR/linux-${KERNEL_VERSION}/arch/arm/boot/dts/armsbc"
+    DTS_MAIN_MAKEFILE="$SCRIPT_DIR/linux-${KERNEL_VERSION}/arch/arm/boot/dts/Makefile"
   else
-    error "Unsupported architecture: $ARCH. Cannot determine DTS path."
+    error "Unsupported architecture: $ARCH for Allwinner boards."
   fi
 
-  # Ensure the DTS file exists in the custom configs
-  BOARD_DTS="$SCRIPT_DIR/custom_configs/dts/$DEVICE_TREE"
-  if [ ! -f "$BOARD_DTS" ]; then
-    error "DTS file not found: $BOARD_DTS. Ensure the correct DTS file is present."
+  # Verify the DTS source directory
+  if [ ! -d "$DTS_SOURCE_DIR" ]; then
+    error "DTS source directory not found: $DTS_SOURCE_DIR. Ensure the directory exists."
   fi
 
-  # Copy the DTS file to the kernel DTS directory
-  log "Copying DTS file to kernel DTS directory..."
-  cp "$BOARD_DTS" "linux-${KERNEL_VERSION}/$DTS_PATH/" || error "Failed to copy DTS file to $DTS_PATH."
-  log "Copied DTS file to: linux-${KERNEL_VERSION}/$DTS_PATH/$(basename "$BOARD_DTS")"
-
-  # Add entry to the DTS Makefile
-  DTS_MAKEFILE="linux-${KERNEL_VERSION}/$DTS_PATH/Makefile"
-  BOARD_NAME=$(basename "${BOARD_DTS%.dts}")
-
-  if [ "$ARCH" = "arm64" ]; then
-    # Use CONFIG_ARCH_SUNXI for arm64
-    if ! grep -q "dtb-\$(CONFIG_ARCH_SUNXI) += $BOARD_NAME.dtb" "$DTS_MAKEFILE"; then
-      echo "dtb-\$(CONFIG_ARCH_SUNXI) += $BOARD_NAME.dtb" >> "$DTS_MAKEFILE"
-      log "Added DTS entry to Makefile: dtb-\$(CONFIG_ARCH_SUNXI) += $BOARD_NAME.dtb"
-    else
-      log "DTS entry already exists in Makefile: dtb-\$(CONFIG_ARCH_SUNXI) += $BOARD_NAME.dtb"
-    fi
-  else
-    # Use CONFIG_MACH_* format for arm
-    FAMILY_PREFIX=$(basename "$BOARD_DTS" | cut -d '-' -f 1)
-    CONFIG_MACH="CONFIG_MACH_${FAMILY_PREFIX^^}" # Convert family prefix to uppercase
-    DTS_ENTRY="dtb-\$($CONFIG_MACH) += $BOARD_NAME.dtb"
-    if ! grep -q "$BOARD_NAME.dtb" "$DTS_MAKEFILE"; then
-      echo "$DTS_ENTRY" >> "$DTS_MAKEFILE"
-      log "Added DTS entry to Makefile: $DTS_ENTRY"
-    else
-      log "DTS entry already exists in Makefile: $DTS_ENTRY"
-    fi
+  # Create the armsbc directory if it doesn't exist
+  if [ ! -d "$DTS_PATH" ]; then
+    log "Creating DTS directory: $DTS_PATH"
+    mkdir -p "$DTS_PATH" || error "Failed to create DTS directory: $DTS_PATH"
   fi
 
-  # Compile all DTBs
-  log "Compiling all DTBs using 'make dtbs'..."
-  cd "linux-${KERNEL_VERSION}" || error "Failed to enter kernel directory."
+  # Copy all files from the source directory to the kernel DTS directory
+  log "Copying all DTS files to kernel DTS directory: $DTS_PATH"
+  cp -r "$DTS_SOURCE_DIR/"* "$DTS_PATH/" || error "Failed to copy DTS files to $DTS_PATH."
+  log "All DTS files copied from $DTS_SOURCE_DIR to $DTS_PATH"
+
+  # Add the 'armsbc' entry to the main DTS Makefile
+  if ! grep -q "subdir-y += armsbc" "$DTS_MAIN_MAKEFILE"; then
+    echo "subdir-y += armsbc" >> "$DTS_MAIN_MAKEFILE"
+    log "Added 'subdir-y += armsbc' to $DTS_MAIN_MAKEFILE"
+  fi
+
+  # Compile the DTB using the kernel build system
+  log "Compiling DTS files using kernel build system..."
+  cd "$SCRIPT_DIR/linux-${KERNEL_VERSION}" || error "Failed to enter kernel source directory."
   make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" dtbs || error "Failed to compile DTBs."
 
-  # Copy compiled DTB to OUT directory
-  log "Copying compiled DTB to OUT directory..."
-  mkdir -p "$OUT_DIR"
-  DTB_FILE="$DTS_PATH/$BOARD_NAME.dtb"
-  cp "$DTB_FILE" "$OUT_DIR/" || error "Failed to copy $DTB_FILE to $OUT_DIR."
-  log "Copied compiled DTB to OUT directory: $OUT_DIR/$(basename "$DTB_FILE")"
+  # Verify and move the generated DTB file
+  GENERATED_DTB="$DTS_PATH/$(basename "${DEVICE_TREE%.dts}.dtb")"
+  if [ -f "$GENERATED_DTB" ]; then
+    log "Generated DTB file: $GENERATED_DTB"
+    mv "$GENERATED_DTB" "$SCRIPT_DIR/OUT/" || error "Failed to move DTB file to OUT directory."
+    log "DTB file moved to OUT directory: $SCRIPT_DIR/OUT/$(basename "$GENERATED_DTB")"
+  else
+    error "DTB file not created: $GENERATED_DTB"
+  fi
 
-  log "DTB compilation and copying completed successfully."
-  cd - >/dev/null
+  log "DTS compilation completed successfully for Allwinner boards."
 }
 
 # Main script execution
