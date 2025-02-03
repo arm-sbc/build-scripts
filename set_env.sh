@@ -156,12 +156,12 @@ select_board() {
       read -p "Enter the number corresponding to your Allwinner board: " BOARD_SELECTION
 
       case $BOARD_SELECTION in
-        1) BOARD="ARM-SBC-RWA-A64"; CHIP="a64"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rwa-a64_defconfig"; KERNEL_DEFCONFIG="armsbc-a64_defconfig"; DEVICE_TREE="sun50i-a64-armsbc-rwa.dts" ;;
-        2) BOARD="ARM-SBC-RP-A40i"; CHIP="a40i"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-rp-a40i_defconfig"; KERNEL_DEFCONFIG="armsbc-a40i_defconfig"; DEVICE_TREE="sun8i-a40i-armsbc-rp.dts" ;;
-        3) BOARD="ARM-SBC-RP-T527"; CHIP="t527"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rp-t527_defconfig"; KERNEL_DEFCONFIG="armsbc-t527_defconfig"; DEVICE_TREE="sun55i-t527-armsbc-rp.dts" ;;
-        4) BOARD="ARM-SBC-XZ-A64"; CHIP="a64"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-xz-a64_defconfig"; KERNEL_DEFCONFIG="armsbc-a64_defconfig"; DEVICE_TREE="sun50i-a64-armsbc-xz.dts" ;;
-        5) BOARD="ARM-SBC-XZ-A20"; CHIP="a20"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-xz-a20_defconfig"; KERNEL_DEFCONFIG="armsbc-a20_defconfig"; DEVICE_TREE="sun7i-a20-armsbc-xz.dts" ;;
-        6) BOARD="ARM-SBC-XZ-A83T"; CHIP="a83t"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-xz-a83t_defconfig"; KERNEL_DEFCONFIG="armsbc-a83_defconfig"; DEVICE_TREE="sun8i-a83t-armsbc-xz.dts" ;;
+        1) BOARD="ARM-SBC-RWA-A64"; CHIP="a64"; PROCESSOR_FAMILY="sun50i"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rwa-a64_defconfig"; KERNEL_DEFCONFIG="armsbc-a64_defconfig"; DEVICE_TREE="sun50i-a64-armsbc-rwa.dts" ;;
+        2) BOARD="ARM-SBC-RP-A40i"; CHIP="a40i"; PROCESSOR_FAMILY="sun8i"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-rp-a40i_defconfig"; KERNEL_DEFCONFIG="armsbc-a40i_defconfig"; DEVICE_TREE="sun8i-a40i-armsbc-rp.dts" ;;
+        3) BOARD="ARM-SBC-RP-T527"; CHIP="t527"; PROCESSOR_FAMILY="sun55i"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rp-t527_defconfig"; KERNEL_DEFCONFIG="armsbc-t527_defconfig"; DEVICE_TREE="sun55i-t527-armsbc-rp.dts" ;;
+        4) BOARD="ARM-SBC-XZ-A64"; CHIP="a64"; PROCESSOR_FAMILY="sun50i"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-xz-a64_defconfig"; KERNEL_DEFCONFIG="armsbc-a64_defconfig"; DEVICE_TREE="sun50i-a64-armsbc-xz.dts" ;;
+        5) BOARD="ARM-SBC-XZ-A20"; CHIP="a20"; PROCESSOR_FAMILY="sun7i"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-xz-a20_defconfig"; KERNEL_DEFCONFIG="armsbc-a20_defconfig"; DEVICE_TREE="sun7i-a20-armsbc-xz.dts" ;;
+        6) BOARD="ARM-SBC-XZ-A83T"; CHIP="a83t"; PROCESSOR_FAMILY="sun8i"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-xz-a83t_defconfig"; KERNEL_DEFCONFIG="armsbc-a83_defconfig"; DEVICE_TREE="sun8i-a83t-armsbc-xz.dts" ;;
         *) log "[ERROR] Invalid Allwinner board selection. Please try again."; continue ;;
       esac
       break

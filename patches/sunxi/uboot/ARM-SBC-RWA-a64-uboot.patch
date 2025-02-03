@@ -23,16 +23,7 @@
 +CONFIG_VIDEO_HDMI=y
 +
 +
---- arch/arm/dts/Makefile	2025-01-14 18:00:10.023604988 +0400
-+++ arch/arm/dts/Makefile	2025-01-14 18:36:36.706399875 +0400
-@@ -722,6 +722,7 @@
- 	sun50i-h6-tanix-tx6-mini.dtb
- dtb-$(CONFIG_MACH_SUN50I) += \
- 	sun50i-a64-amarula-relic.dtb \
-+	sun50i-a64-armsbc-rwa.dtb \
- 	sun50i-a64-bananapi-m64.dtb \
- 	sun50i-a64-nanopi-a64.dtb \
- 	sun50i-a64-oceanic-5205-5inmfd.dtb \
+
 --- arch/arm/dts/sun50i-a64-armsbc-rwa.dts	1970-01-01 04:00:00.000000000 +0400
 +++ arch/arm/dts/sun50i-a64-armsbc-rwa.dts	2025-01-14 17:27:58.756838042 +0400
 @@ -0,0 +1,540 @@

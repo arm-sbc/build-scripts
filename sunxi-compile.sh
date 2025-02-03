@@ -34,31 +34,72 @@ check_cross_compiler() {
   fi
 }
 
-# Function to apply patches
-apply_patches() {
-  log "Starting patch application process..."
-  PATCH_DIRS=()
+apply_uboot_patches() {
+  log "Starting U-Boot patch application process..."
+  PATCH_DIR="patches/sunxi/uboot"
 
-  if [[ "$BUILD_OPTION" == "uboot" || "$BUILD_OPTION" == "all" ]]; then
-    PATCH_DIRS+=("patches/sunxi/uboot")
+  if [[ ! -d "$PATCH_DIR" ]]; then
+    log "Patch directory $PATCH_DIR not found. Skipping U-Boot patch application."
+    return
   fi
 
-  for dir in "${PATCH_DIRS[@]}"; do
-    if [ -d "$dir" ]; then
-      log "Applying patches from $dir..."
-      for patch in "$dir"/*.patch; do
-        [ -f "$patch" ] || continue
-        log "Applying patch $patch..."
-        (
-          cd u-boot || error "Failed to enter U-Boot directory."
-          patch -Np0 -i "../$patch" || log "Patch $patch already applied or conflicts detected. Skipping."
-        )
-      done
-    else
-      log "Patch directory $dir not found. Skipping."
-    fi
+  log "Applying U-Boot patches from $PATCH_DIR..."
+  for patch in "$PATCH_DIR"/*.patch; do
+    [ -f "$patch" ] || continue
+    log "Applying patch $patch..."
+    (
+      cd u-boot || error "Failed to enter U-Boot directory."
+      patch -Np0 -i "../$patch" || log "Patch $patch already applied or conflicts detected. Skipping."
+    )
   done
-  log "Patch application process completed."
+
+  log "U-Boot patch application process completed."
+}
+
+apply_kernel_patches() {
+  log "Starting kernel patch application process..."
+  PATCH_DIR="patches/sunxi/kernel"
+
+  if [[ ! -d "$PATCH_DIR" ]]; then
+    log "Patch directory $PATCH_DIR not found. Skipping kernel patch application."
+    return
+  fi
+
+  log "Applying kernel patches from $PATCH_DIR..."
+  for patch in "$PATCH_DIR"/*.patch; do
+    [ -f "$patch" ] || continue
+    log "Applying patch $patch..."
+    (
+      cd "linux-$KERNEL_VERSION" || error "Failed to enter kernel directory."
+      patch -Np1 -i "../$patch" || log "Patch $patch already applied or conflicts detected. Skipping."
+    )
+  done
+
+  log "Kernel patch application process completed."
+}
+
+# Function to dynamically add DTB entry to Makefile
+add_dtb_entry() {
+  MAKEFILE_PATH="path/to/Makefile"  # Adjust this path as needed
+  NEW_DTB_ENTRY="$DEVICE_TREE_NAME.dtb"
+
+  # Detect the correct family section in the Makefile
+  FAMILY_SECTION=$(grep -i "dtb-\$(CONFIG_MACH_$PROCESSOR_FAMILY)" "$MAKEFILE_PATH" | head -n 1)
+
+  if [[ -z "$FAMILY_SECTION" ]]; then
+    error "Family section for $PROCESSOR_FAMILY not found in the Makefile."
+  fi
+
+  # Construct the line to add to the Makefile
+  NEW_LINE="    $NEW_DTB_ENTRY"
+
+  # Append the new DTB entry under the existing family section
+  if grep -q "$NEW_LINE" "$MAKEFILE_PATH"; then
+    log "DTB entry $NEW_DTB_ENTRY already exists in Makefile. Skipping addition."
+  else
+    sed -i "/$FAMILY_SECTION/a $NEW_LINE" "$MAKEFILE_PATH"
+    log "Added $NEW_DTB_ENTRY to the Makefile under $FAMILY_SECTION."
+  fi
 }
 
 # Function to compile ATF
@@ -107,8 +148,16 @@ compile_uboot() {
     return
   fi
 
-  log "Compiling U-Boot for $CHIP..."
+  log "Compiling U-Boot for $CHIP ($PROCESSOR_FAMILY family)..."
   cd u-boot || error "Failed to enter U-Boot directory."
+
+  # Apply patches based on processor family if necessary
+  if [ -d "patches/$PROCESSOR_FAMILY" ]; then
+    log "Applying patches for $PROCESSOR_FAMILY..."
+    for patch in patches/$PROCESSOR_FAMILY/*.patch; do
+      git apply "$patch" || log "Failed to apply patch: $patch"
+    done
+  fi
 
   # Clean the build directory
   log "Cleaning the build directory..."
@@ -174,7 +223,6 @@ compile_uboot() {
   cd - >/dev/null
 }
 
-# Function to compile the kernel
 compile_kernel() {
   log "Compiling Linux kernel for $BOARD ($CHIP)..."
 
@@ -211,8 +259,35 @@ compile_kernel() {
   fi
 
   # Compile the kernel image and modules
-  make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" -j$(nproc) Image modules || error "Kernel compilation failed."
-  make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" INSTALL_MOD_PATH="$OUT_DIR/modules" modules_install || error "Module installation failed."
+  if [[ "$ARCH" == "arm64" ]]; then
+    KERNEL_IMAGE="Image"
+  else
+    KERNEL_IMAGE="zImage"
+  fi
+
+  make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" -j$(nproc) "$KERNEL_IMAGE" modules || error "Kernel compilation failed."
+  make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" INSTALL_MOD_PATH="$OUT_DIR/tmp_modules" modules_install || error "Module installation failed."
+
+  # Copy only the kernel modules directory to the final OUT/modules location
+  MODULES_DIR="$OUT_DIR/modules"
+  mkdir -p "$MODULES_DIR"
+  KERNEL_MODULES_SRC="$OUT_DIR/tmp_modules/lib/modules/$KERNEL_VERSION"
+  KERNEL_MODULES_DEST="$MODULES_DIR/$KERNEL_VERSION"
+
+  if [ -d "$KERNEL_MODULES_SRC" ]; then
+    cp -r "$KERNEL_MODULES_SRC" "$MODULES_DIR/" || error "Failed to copy kernel modules to $MODULES_DIR."
+    log "Copied kernel modules to $MODULES_DIR."
+  else
+    error "Kernel modules directory not found: $KERNEL_MODULES_SRC"
+  fi
+
+  # Clean up temporary modules directory
+  rm -rf "$OUT_DIR/tmp_modules"
+
+  # Copy the kernel image to the OUT directory without version suffix
+  KERNEL_OUTPUT="$OUT_DIR/$KERNEL_IMAGE"
+  cp "arch/$ARCH/boot/$KERNEL_IMAGE" "$KERNEL_OUTPUT" || error "Failed to copy $KERNEL_IMAGE to $OUT_DIR."
+  log "Copied $KERNEL_IMAGE to $OUT_DIR."
 
   # Rename and copy System.map to OUT directory with version suffix
   SYSTEM_MAP="System.map"
@@ -299,11 +374,14 @@ case "$1" in
     BUILD_OPTION="uboot"
     check_cross_compiler
     compile_atf
+    apply_uboot_patches
+    add_dtb_entry
     compile_uboot
     ;;
   kernel)
     BUILD_OPTION="kernel"
     check_cross_compiler
+    apply_kernel_patches
     compile_kernel
     compile_dts
     ;;
@@ -311,7 +389,9 @@ case "$1" in
     BUILD_OPTION="all"
     check_cross_compiler
     compile_atf
+    apply_uboot_patches
     compile_uboot
+    apply_kernel_patches
     compile_kernel
     compile_dts
     ;;

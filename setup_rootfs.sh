@@ -40,12 +40,21 @@ if ! sudo -v; then
 fi
 info "Sudo access verified."
 
-# Function to prepare rootfs
 prepare_rootfs() {
   ROOTFS_DIR="OUT/rootfs"
 
   # Base URL for Linux Containers
   BASE_URL="https://images.linuxcontainers.org/images"
+
+  # Determine architecture-specific URL format
+  if [[ "$ARCH" == "arm" ]]; then
+    ARCH_URL="armhf"
+  elif [[ "$ARCH" == "arm64" ]]; then
+    ARCH_URL="arm64"
+  else
+    error "Unsupported architecture: $ARCH"
+    exit 1
+  fi
 
   # Construct the URL for the rootfs directory
   if [ "$DIST" -eq 1 ]; then
@@ -57,7 +66,7 @@ prepare_rootfs() {
     exit 1
   fi
 
-  ROOTFS_URL="$BASE_URL/$DISTRO/$FLAVOR/$ARCH/default/"
+  ROOTFS_URL="$BASE_URL/$DISTRO/$FLAVOR/$ARCH_URL/default/"
 
   info "Fetching rootfs directory listing from $ROOTFS_URL..."
   wget -q -O - "$ROOTFS_URL" > /tmp/rootfs_listing.html
