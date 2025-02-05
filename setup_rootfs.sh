@@ -315,5 +315,5 @@ case $OPTION in
         ;;
 esac
 
-info "Rootfs creation script completed successfully. To create SD card/eMMC images please run ./mk-image.sh"
+info "Rootfs creation script completed successfully. To create SD card/eMMC images please run ./mk-image.sh. All files are in the OUT-ARM-SBC-XXXX folder."
 
