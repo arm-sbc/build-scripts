@@ -131,8 +131,7 @@ compile_uboot() {
   log "Copying U-Boot output files to $OUTPUT_DIR"
   cp idbloader.img u-boot-rockchip.bin "$OUTPUT_DIR/" 2>/dev/null || warn "idbloader.img or u-boot-rockchip.bin not found, skipping."
   cp u-boot.itb "$OUTPUT_DIR/" 2>/dev/null || warn "u-boot.itb not found, skipping."
-  cp u-boot* "$OUTPUT_DIR/" || warn "Failed to copy additional U-Boot files to $OUTPUT_DIR."
-
+  
   log "U-Boot compiled and copied to $OUTPUT_DIR successfully."
   cd - >/dev/null
 }
@@ -360,14 +359,14 @@ case "$1" in
     ;;
   kernel)
     BUILD_OPTION="kernel"
-    check_cross_compiler
+    #check_cross_compiler
     apply_kernel_patches
     compile_kernel
     compile_dts
     ;;
   all)
     BUILD_OPTION="all"
-    check_cross_compiler
+    #check_cross_compiler
     compile_atf
     apply_uboot_patches
     compile_uboot
