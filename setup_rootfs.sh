@@ -41,36 +41,45 @@ fi
 info "Sudo access verified."
 
 prepare_rootfs() {
-  ROOTFS_DIR="OUT/rootfs"
+  ROOTFS_DIR="$OUTPUT_DIR/rootfs"
+  IMAGES_DIR="$OUTPUT_DIR/images"
 
   # Base URL for Linux Containers
   BASE_URL="https://images.linuxcontainers.org/images"
 
   # Determine architecture-specific URL format
-  if [[ "$ARCH" == "arm" ]]; then
-    ARCH_URL="armhf"
-  elif [[ "$ARCH" == "arm64" ]]; then
-    ARCH_URL="arm64"
-  else
-    error "Unsupported architecture: $ARCH"
-    exit 1
-  fi
+  case "$ARCH" in
+    "arm")
+      ARCH_URL="armhf"
+      ;;
+    "arm64")
+      ARCH_URL="arm64"
+      ;;
+    *)
+      error "Unsupported architecture: $ARCH"
+      exit 1
+      ;;
+  esac
+
+  # Determine distribution
+  case "$DIST" in
+    1)
+      DISTRO="ubuntu"
+      ;;
+    2)
+      DISTRO="debian"
+      ;;
+    *)
+      error "Invalid distribution selection. Exiting."
+      exit 1
+      ;;
+  esac
 
   # Construct the URL for the rootfs directory
-  if [ "$DIST" -eq 1 ]; then
-    DISTRO="ubuntu"
-  elif [ "$DIST" -eq 2 ]; then
-    DISTRO="debian"
-  else
-    error "Invalid distribution selection. Exiting."
-    exit 1
-  fi
-
   ROOTFS_URL="$BASE_URL/$DISTRO/$FLAVOR/$ARCH_URL/default/"
 
   info "Fetching rootfs directory listing from $ROOTFS_URL..."
-  wget -q -O - "$ROOTFS_URL" > /tmp/rootfs_listing.html
-  if [ $? -ne 0 ]; then
+  if ! wget -q -O /tmp/rootfs_listing.html "$ROOTFS_URL"; then
     error "Failed to fetch directory listing from $ROOTFS_URL. Please check your internet connection or the URL."
     exit 1
   fi
@@ -85,33 +94,42 @@ prepare_rootfs() {
   IMAGE_URL="${ROOTFS_URL}${LATEST_DATE}/rootfs.tar.xz"
 
   info "Downloading prebuilt image from $IMAGE_URL..."
-  mkdir -p OUT/images
-  wget -q -O ./OUT/images/rootfs.tar.xz "$IMAGE_URL" || { error "Failed to download rootfs.tar.xz."; exit 1; }
+  mkdir -p "$IMAGES_DIR"
+  if ! wget -q -O "$IMAGES_DIR/rootfs.tar.xz" "$IMAGE_URL"; then
+    error "Failed to download rootfs.tar.xz."
+    exit 1
+  fi
 
-  info "Extracting image: ./OUT/images/rootfs.tar.xz..."
+  info "Extracting image: $IMAGES_DIR/rootfs.tar.xz..."
   rm -rf "$ROOTFS_DIR"
   mkdir -p "$ROOTFS_DIR"
-  tar -xf ./OUT/images/rootfs.tar.xz -C "$ROOTFS_DIR" || { error "Failed to extract the rootfs image."; exit 1; }
+  if ! tar -xf "$IMAGES_DIR/rootfs.tar.xz" -C "$ROOTFS_DIR"; then
+    error "Failed to extract the rootfs image."
+    exit 1
+  fi
+
   info "Root filesystem extracted to $ROOTFS_DIR."
 
   # Chroot into the rootfs directory and update passwords
   info "Changing root to $ROOTFS_DIR to update passwords..."
-  sudo chroot "$ROOTFS_DIR" /bin/bash -c "\
-    echo 'Updating root password...' && \
-    passwd && \
-    echo 'Checking for user directories in /home...' && \
-    for user_dir in /home/*; do \
-      if [ -d \"$user_dir\" ]; then \
-        user=\$(basename \"$user_dir\") && \
-        echo \"Updating password for user: \$user\" && \
-        echo \"Please set the password for user: \$user\" && \
-        passwd \"\$user\"; \
-      fi; \
-    done"
+  sudo chroot "$ROOTFS_DIR" /bin/bash -c "
+    echo 'Updating root password...' &&
+    passwd &&
+    echo 'Checking for user directories in /home...' &&
+    for user_dir in /home/*; do
+      if [ -d \"\$user_dir\" ]; then
+        user=\$(basename \"\$user_dir\")
+        echo \"Updating password for user: \$user\" &&
+        echo \"Please set the password for user: \$user\" &&
+        passwd \"\$user\"
+      fi
+    done
+  "
 }
 
+
 create_fresh_rootfs() {
-    FRESH_DIR="OUT/fresh_$VERSION"
+    FRESH_DIR="$OUTPUT_DIR/fresh_$VERSION"
     info "Preparing fresh rootfs in $FRESH_DIR for $BOARD ($ARCH)..."
 
     # Check if the directory already exists
