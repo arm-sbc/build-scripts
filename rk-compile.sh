@@ -2,11 +2,33 @@
 
 # Script Name: rk-compile.sh
 
-# Ensure the environment is prepared
-if [ -z "$BOARD" ] || [ -z "$CHIP" ] || [ -z "$UBOOT_DEFCONFIG" ] || [ -z "$KERNEL_DEFCONFIG" ] || [ -z "$KERNEL_VERSION" ]; then
-  echo -e "\033[1;31m[ERROR] Required environment variables are not set. Please run set_env.sh first.\033[0m"
-  exit 1
+# Function to log messages with timestamps
+log() {
+  echo -e "\033[1;34m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m"
+}
+
+log "Dumping environment variables..."
+env | grep -E 'CROSS_COMPILE|BL31|DEVICE_TREE|CONFIG' > ../script_env_dump.txt
+
+
+# Check required environment variables based on build option
+log "Checking required environment variables for build option: $BUILD_OPTION"
+
+if [ "$BUILD_OPTION" = "uboot" ]; then
+  # Check only U-Boot-related variables
+  if [ -z "$BOARD" ] || [ -z "$CHIP" ] || [ -z "$UBOOT_DEFCONFIG" ] || [ -z "$OUTPUT_DIR" ]; then
+    error "Required environment variables are not set for U-Boot compilation. Please run set_env.sh first."
+  fi
+elif [ "$BUILD_OPTION" = "kernel" ] || [ "$BUILD_OPTION" = "all" ]; then
+  # Check all variables, including kernel-related ones
+  if [ -z "$BOARD" ] || [ -z "$CHIP" ] || [ -z "$UBOOT_DEFCONFIG" ] || [ -z "$KERNEL_DEFCONFIG" ] || [ -z "$KERNEL_VERSION" ] || [ -z "$OUTPUT_DIR" ]; then
+    error "Required environment variables are not set for kernel compilation. Please run set_env.sh first."
+  fi
+else
+  error "Invalid build option: $BUILD_OPTION"
 fi
+
+log "Environment variables set: BOARD=$BOARD, CHIP=$CHIP, UBOOT_DEFCONFIG=$UBOOT_DEFCONFIG, KERNEL_DEFCONFIG=$KERNEL_DEFCONFIG, KERNEL_VERSION=$KERNEL_VERSION, OUTPUT_DIR=$OUTPUT_DIR"
 
 # Color-coded log messages
 log() {
@@ -20,64 +42,101 @@ error() {
   exit 1
 }
 
-# Function to check cross-compiler
-check_cross_compiler() {
-  log "Checking cross-compiler for $CHIP..."
-  if command -v aarch64-linux-gnu-gcc &>/dev/null; then
-    CROSS_COMPILER_VERSION=$(aarch64-linux-gnu-gcc --version | head -n 1)
-    log "Using cross-compiler: $CROSS_COMPILER_VERSION"
-  else
-    error "Cross-compiler 'aarch64-linux-gnu-gcc' not found. Please install it."
-  fi
+ERROR_LOG="$OUTPUT_DIR/error.log"
+error() {
+  echo -e "\033[1;31m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m"  # Red for errors
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] ERROR: $1" >> "$ERROR_LOG"
+  exit 1
 }
 
-# Function to apply patches
-apply_patches() {
-  log "Starting patch application process..."
-  PATCH_DIRS=()
+apply_uboot_patches() {
+  log "Starting U-Boot patch application process..."
+  PATCH_DIR="patches/rockchip/uboot"
 
-  if [[ "$BUILD_OPTION" == "uboot" || "$BUILD_OPTION" == "all" ]]; then
-    PATCH_DIRS+=("patches/sunxi/uboot")
+  if [[ ! -d "$PATCH_DIR" ]]; then
+    log "Patch directory $PATCH_DIR not found. Skipping U-Boot patch application."
+    return
   fi
-  for dir in "${PATCH_DIRS[@]}"; do
-    if [ -d "$dir" ]; then
-      log "Applying patches from $dir..."
-      for patch in "$dir"/*.patch; do
-        [ -f "$patch" ] || continue
-        log "Applying patch $patch..."
-        patch -Np0 < "$patch" || log "Patch $patch already applied or conflicts detected. Skipping."
-      done
-    else
-      log "Patch directory $dir not found. Skipping."
-    fi
+
+  log "Applying U-Boot patches from $PATCH_DIR..."
+  for patch in "$PATCH_DIR"/*.patch; do
+    [ -f "$patch" ] || continue
+    log "Applying patch $patch..."
+    (
+      cd u-boot || error "Failed to enter U-Boot directory."
+      patch -Np0 -i "../$patch" || log "Patch $patch already applied or conflicts detected. Skipping."
+    )
   done
-  log "Patch application process completed."
+
+  log "U-Boot patch application process completed."
+}
+
+apply_kernel_patches() {
+  log "Starting kernel patch application process..."
+  PATCH_DIR="patches/rockchip/kernel"
+
+  if [[ ! -d "$PATCH_DIR" ]]; then
+    log "Patch directory $PATCH_DIR not found. Skipping kernel patch application."
+    return
+  fi
+
+  log "Applying kernel patches from $PATCH_DIR..."
+  for patch in "$PATCH_DIR"/*.patch; do
+    [ -f "$patch" ] || continue
+    log "Applying patch $patch..."
+    (
+      cd "linux-$KERNEL_VERSION" || error "Failed to enter kernel directory."
+      patch -Np0 -i "../$patch" || log "Patch $patch already applied or conflicts detected. Skipping."
+    )
+  done
+
+  log "Kernel patch application process completed."
 }
 
 # Function to compile U-Boot
 compile_uboot() {
-  log "Compiling U-Boot for $CHIP..."
+  log "Compiling U-Boot for $CHIP ($ARCH)..."
 
   cd u-boot || error "U-Boot source directory not found."
 
-  # Clean the build directory
-  make distclean
+  log "Cleaning U-Boot build directory..."
+  make distclean || warn "Failed to clean U-Boot build directory. Continuing."
 
-  # Configure and compile U-Boot
-  if ! make CROSS_COMPILE=aarch64-linux-gnu- "$UBOOT_DEFCONFIG"; then
-    error "Failed to configure U-Boot with defconfig: $UBOOT_DEFCONFIG"
+  log "Configuring U-Boot with defconfig: $UBOOT_DEFCONFIG"
+  make CROSS_COMPILE="$CROSS_COMPILE" "$UBOOT_DEFCONFIG" || error "Failed to configure U-Boot with defconfig."
+
+  # Extract DEVICE_TREE from .config
+  DEVICE_TREE_NAME=$(grep -oP 'CONFIG_DEFAULT_DEVICE_TREE="\K[^"]+' .config)
+  if [[ -z "$DEVICE_TREE_NAME" ]]; then
+    error "CONFIG_DEFAULT_DEVICE_TREE is not set. Check the defconfig or .config file."
+  fi
+  log "DEVICE_TREE_NAME resolved from .config: $DEVICE_TREE_NAME"
+
+  # Check and export BL31 for ARM64
+  if [[ "$ARCH" == "arm64" ]]; then
+    if [[ -z "$BL31" || ! -f "$BL31" ]]; then
+      error "BL31 binary not found. Ensure Trusted Firmware is compiled and BL31 is set."
+    fi
+    log "Using BL31 binary located at: $BL31"
   fi
 
-  if ! make -j$(nproc) CROSS_COMPILE=aarch64-linux-gnu-; then
-    error "U-Boot compilation failed."
-  fi
+  # Compile U-Boot with DEVICE_TREE and BL31
+  log "Building U-Boot with DEVICE_TREE=$DEVICE_TREE_NAME"
+  make CROSS_COMPILE="$CROSS_COMPILE" DEVICE_TREE="$DEVICE_TREE_NAME" BL31="$BL31" -j$(nproc) || error "U-Boot compilation failed."
 
-  # Copy compiled binaries to OUT directory
-  mkdir -p ../OUT
-  cp u-boot* ../OUT/ || error "Failed to copy U-Boot binaries to OUT directory."
-  log "U-Boot compiled and copied to OUT directory successfully."
-  cd ..
+  # Prepare output directory
+  mkdir -p "$OUTPUT_DIR"
+
+  # Copy output files based on board and configuration
+  log "Copying U-Boot output files to $OUTPUT_DIR"
+  cp idbloader.img u-boot-rockchip.bin "$OUTPUT_DIR/" 2>/dev/null || warn "idbloader.img or u-boot-rockchip.bin not found, skipping."
+  cp u-boot.itb "$OUTPUT_DIR/" 2>/dev/null || warn "u-boot.itb not found, skipping."
+  cp u-boot* "$OUTPUT_DIR/" || warn "Failed to copy additional U-Boot files to $OUTPUT_DIR."
+
+  log "U-Boot compiled and copied to $OUTPUT_DIR successfully."
+  cd - >/dev/null
 }
+
 
 # Function to compile Trusted Firmware (ATF)
 compile_atf() {
@@ -91,22 +150,39 @@ compile_atf() {
   log "Trusted Firmware compiled successfully. BL31 is at $BL31"
 }
 
-# Function to compile OP-TEE
 compile_optee() {
   log "Compiling OP-TEE for $CHIP..."
 
-  if [ ! -d "optee_os" ]; then
-    warn "OP-TEE source not found. Skipping OP-TEE compilation."
+  # Compile OP-TEE only for rk3399
+  if [ "$CHIP" != "rk3399" ]; then
+    log "OP-TEE is not required for CHIP=$CHIP. Skipping OP-TEE compilation."
     return
   fi
 
+  # Clone OP-TEE repository if it doesn't exist
+  if [ ! -d "optee_os" ]; then
+    log "Cloning OP-TEE source repository..."
+    git clone https://github.com/OP-TEE/optee_os.git || error "Failed to clone OP-TEE repository."
+  fi
+
+  # Enter the OP-TEE directory
   cd optee_os || error "Failed to enter OP-TEE source directory."
-  make clean
-  make PLATFORM=rockchip-$CHIP CFG_ARM64_core=y -j$(nproc) || error "OP-TEE compilation failed."
-  export TEE=$(pwd)/out/arm-plat-rockchip/core/tee.bin
-  [ -f "$TEE" ] || error "TEE binary not found after OP-TEE compilation."
-  cd ..
-  log "OP-TEE compiled successfully. TEE binary is at $TEE"
+
+  # Clean and compile OP-TEE
+  #log "Cleaning previous OP-TEE build..."
+  #make clean || warn "Failed to clean OP-TEE build. Continuing with compilation..."
+
+  log "Compiling OP-TEE for platform rockchip-rk3399..."
+  make PLATFORM=rockchip-rk3399 CFG_ARM64_core=y -j$(nproc) V=2 || error "OP-TEE compilation failed."
+  
+  # Verify and export the path to the compiled TEE binary
+  export TEE="$(pwd)/out/arm-plat-rockchip/core/tee.bin"
+  if [ ! -f "$TEE" ]; then
+    error "TEE binary not found after OP-TEE compilation. Expected path: $TEE"
+  fi
+
+  log "OP-TEE compiled successfully. TEE binary is located at: $TEE"
+  cd - >/dev/null
 }
 
 # Function to compile the Linux kernel
@@ -168,10 +244,10 @@ compile_kernel() {
   fi
 
   # Copy the updated .config to the OUT directory
-  CONFIG_OUTPUT="../OUT/config-$KERNEL_VERSION"
+  CONFIG_OUTPUT="$OUTPUT_DIR/config-$KERNEL_VERSION"
   if [ -f ".config" ]; then
-    cp .config "$CONFIG_OUTPUT" || error "Failed to copy updated .config to $CONFIG_OUTPUT"
-    log "Copied updated kernel configuration to $CONFIG_OUTPUT"
+    cp .config "$OUTPUT_DIR/" || error "Failed to copy updated .config to $CONFIG_OUTPUT"
+    log "Copied updated kernel configuration to $OUTPUT_DIR/"
   else
     error ".config file not found after kernel configuration."
   fi
@@ -179,10 +255,10 @@ compile_kernel() {
   # Build kernel Image and modules
   make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" -j$(nproc) "$KERNEL_IMAGE_TYPE" modules || error "Kernel compilation failed."
 
-  MODULES_OUT_DIR="../OUT/modules"
-  mkdir -p "$MODULES_OUT_DIR"
+  MODULES_OUT_DIR="$OUTPUT_DIR/"
+  mkdir -p "$OUTPUT_DIR/"
   make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" INSTALL_MOD_PATH="$MODULES_OUT_DIR" modules_install || error "Failed to install modules."
-  log "Kernel modules installed to $MODULES_OUT_DIR."
+  log "Kernel modules installed to $OUTPUT_DIR/."
 
 # Function to compile DTS files for Rockchip boards
 compile_dts() {
@@ -240,7 +316,7 @@ compile_dts() {
   GENERATED_DTB="$DTS_PATH/$(basename "${DEVICE_TREE%.dts}.dtb")"
   if [ -f "$GENERATED_DTB" ]; then
     log "Generated DTB file: $GENERATED_DTB"
-    mv "$GENERATED_DTB" "$SCRIPT_DIR/OUT/" || error "Failed to move DTB file to OUT directory."
+    mv "$GENERATED_DTB" "$OUTPUT_DIR/" || error "Failed to move DTB file to OUT directory."
     log "DTB file moved to OUT directory: $SCRIPT_DIR/OUT/$(basename "$GENERATED_DTB")"
   else
     error "DTB file not created: $GENERATED_DTB"
@@ -251,11 +327,11 @@ compile_dts() {
 
   # Copy the kernel image, .config, and System.map to OUT directory
   KERNEL_IMAGE_PATH="arch/$ARCH/boot/$KERNEL_IMAGE_TYPE"
-  SYSTEM_MAP_OUTPUT="../OUT/System.map-$KERNEL_VERSION"
+  SYSTEM_MAP_OUTPUT="$OUTPUT_DIR/System.map-$KERNEL_VERSION"
 
   # Copy kernel image
   if [ -f "$KERNEL_IMAGE_PATH" ]; then
-    cp "$KERNEL_IMAGE_PATH" ../OUT/ || error "Failed to copy kernel image to OUT directory."
+    cp "$KERNEL_IMAGE_PATH" $OUTPUT_DIR/ || error "Failed to copy kernel image to OUT directory."
     log "Copied kernel image ($KERNEL_IMAGE_PATH) to OUT directory."
   else
     error "Kernel image not found: $KERNEL_IMAGE_PATH"
@@ -273,26 +349,29 @@ compile_dts() {
   cd ..
 }
 
-# Main script execution based on input argument
+# Main script execution
 case "$1" in
   uboot)
-    check_cross_compiler
-    apply_patches
+    BUILD_OPTION="uboot"
+    #check_cross_compiler
     compile_atf
-    compile_optee
+    apply_uboot_patches
     compile_uboot
     ;;
   kernel)
+    BUILD_OPTION="kernel"
     check_cross_compiler
+    apply_kernel_patches
     compile_kernel
     compile_dts
     ;;
   all)
+    BUILD_OPTION="all"
     check_cross_compiler
-    apply_patches
     compile_atf
-    compile_optee
+    apply_uboot_patches
     compile_uboot
+    apply_kernel_patches
     compile_kernel
     compile_dts
     ;;
