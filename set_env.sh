@@ -142,7 +142,7 @@ prepare_output_directory() {
 
   if [ -d "$OUTPUT_DIR" ]; then
     log "Cleaning output directory contents..."
-    rm -rf "$OUTPUT_DIR"/* || { log "[ERROR] Failed to clean $OUTPUT_DIR."; exit 1; }
+    sudo rm -rf "$OUTPUT_DIR"/* || { log "[ERROR] Failed to clean $OUTPUT_DIR."; exit 1; }
   else
     log "Creating output directory: $OUTPUT_DIR..."
     mkdir -p "$OUTPUT_DIR" || { log "[ERROR] Failed to create $OUTPUT_DIR."; exit 1; }
