@@ -1,54 +1,32 @@
 #!/bin/bash
 
 # Script Name: set_env.sh
+
 # Function to log messages with timestamps
 log() {
-  echo -e "\033[1;34m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m"  # Blue color for logs
+  echo -e "\033[1;34m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m"
 }
 
 # Function to install required packages
 install_packages() {
   log "Checking and installing required dependencies..."
   REQUIRED_PACKAGES=(
-    "build-essential"
-    "gcc"
-    "gcc-arm-none-eabi"
-    "make"
-    "swig"
-    "gcc-arm-linux-gnueabihf"
-    "libssl-dev"
-    "curl"
-    "bison"
-    "flex"
-    "git"
-    "wget"
-    "bc"
-    "python3"
-    "libncurses-dev"
-    "libgnutls28-dev"
-    "libncurses-dev"
-    "uuid-dev"
-    "python3-pip"
-    "device-tree-compiler"
-    "gcc-aarch64-linux-gnu"
-    "g++-aarch64-linux-gnu"
-    "qemu"
-    "qemu-user"
-    "qemu-user-static"
-    "binfmt-support"
+    "build-essential" "gcc" "gcc-arm-none-eabi" "make" "swig" "gcc-arm-linux-gnueabihf"
+    "libssl-dev" "curl" "bison" "flex" "git" "wget" "bc" "python3" "libncurses-dev"
+    "libgnutls28-dev" "uuid-dev" "python3-pip" "device-tree-compiler"
+    "gcc-aarch64-linux-gnu" "g++-aarch64-linux-gnu" "qemu" "qemu-user"
+    "qemu-user-static" "binfmt-support"
   )
   MISSING_PACKAGES=()
 
-  # Check each package
   for pkg in "${REQUIRED_PACKAGES[@]}"; do
     if ! dpkg -l | grep -qw "$pkg"; then
       MISSING_PACKAGES+=("$pkg")
     fi
   done
 
-  # Install missing packages
   if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
-    log "The following packages are missing and will be installed: ${MISSING_PACKAGES[*]}"
+    log "Installing missing packages: ${MISSING_PACKAGES[*]}"
     sudo apt update
     sudo apt install -y "${MISSING_PACKAGES[@]}" || { log "[ERROR] Failed to install some packages. Exiting."; exit 1; }
     log "All required system packages have been installed."
@@ -56,7 +34,6 @@ install_packages() {
     log "All required system dependencies are already installed."
   fi
 
-  # Install Python packages
   log "Checking and installing required Python packages..."
   REQUIRED_PYTHON_PACKAGES=("pyelftools")
   for pkg in "${REQUIRED_PYTHON_PACKAGES[@]}"; do
@@ -69,48 +46,6 @@ install_packages() {
   done
 }
 
-# Function to set up QEMU for chroot
-setup_qemu() {
-  log "Setting up QEMU for chroot environment..."
-
-  # Ensure QEMU is registered for the target architecture
-  sudo update-binfmts --enable qemu-arm
-  sudo update-binfmts --enable qemu-aarch64
-
-  # Copy QEMU binary to rootfs if needed
-  if [ -d "/path/to/rootfs/usr/bin" ]; then
-    sudo cp /usr/bin/qemu-aarch64-static /path/to/rootfs/usr/bin/ || {
-      log "[ERROR] Failed to copy QEMU binary to rootfs. Exiting."
-      exit 1
-    }
-    log "QEMU binary successfully copied to rootfs."
-  else
-    log "[ERROR] Rootfs path does not exist or is invalid. Exiting."
-    exit 1
-  fi
-
-  log "QEMU setup complete for chroot environment."
-}
-
-
-# Function to prepare the output directory
-prepare_output_directory() {
-  log "Preparing output directory..."
-
-  # Check if the OUT directory exists
-  if [ -d "OUT" ]; then
-    log "OUT directory exists. Cleaning its contents..."
-    rm -rf OUT/* || { log "[ERROR] Failed to clean OUT directory."; exit 1; }
-    log "OUT directory cleaned."
-  else
-    log "OUT directory does not exist. Creating it..."
-    mkdir -p OUT || { log "[ERROR] Failed to create OUT directory."; exit 1; }
-    log "OUT directory created."
-  fi
-
-  log "Output directory is ready."
-}
-
 # Function to select board type and specific board
 select_board() {
   while :; do
@@ -121,7 +56,7 @@ select_board() {
 
     if [[ "$BOARD_TYPE" == "1" ]]; then
       echo "Rockchip board selected."
-      COMPILE_SCRIPT="./rk-compile.sh"  # Assign Rockchip compile script
+      COMPILE_SCRIPT="./rk-compile.sh"
       echo -e "\033[1;32mSelect a Rockchip board:\033[0m"
       echo "1- ARM-SBC-DCA-3288"
       echo "2- ARM-SBC-K2-3288"
@@ -139,13 +74,22 @@ select_board() {
         1) BOARD="ARM-SBC-DCA-3288"; CHIP="rk3288"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-dca-3288_defconfig"; KERNEL_DEFCONFIG="armsbc-3288_defconfig"; DEVICE_TREE="rk3288-armsbc-dca.dts" ;;
         2) BOARD="ARM-SBC-K2-3288"; CHIP="rk3288"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-k2-3288_defconfig"; KERNEL_DEFCONFIG="armsbc-3288_defconfig"; DEVICE_TREE="rk3288-armsbc-k2.dts" ;;
         3) BOARD="ARM-SBC-DCA-3399"; CHIP="rk3399"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-dca-3399_defconfig"; KERNEL_DEFCONFIG="armsbc-3399_defconfig"; DEVICE_TREE="rk3399-armsbc-dca.dts" ;;
-        # Additional boards here...
+        4) BOARD="ARM-SBC-DCA-3566"; CHIP="rk3566"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-dca-3566_defconfig"; KERNEL_DEFCONFIG="armsbc-3566_defconfig"; DEVICE_TREE="rk3566-armsbc-dca.dts" ;;
+        5) BOARD="ARM-SBC-DCA-3568"; CHIP="rk3568"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-dca-3568_defconfig"; KERNEL_DEFCONFIG="armsbc-3568_defconfig"; DEVICE_TREE="rk3568-armsbc-dca.dts" ;;
+        6) BOARD="ARM-SBC-EDG-3576"; CHIP="rk3576"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-edg-3576_defconfig"; KERNEL_DEFCONFIG="armsbc-3576_defconfig"; DEVICE_TREE="rk3576-armsbc-edg.dts" ;;
+        7) BOARD="ARM-SBC-NANO-3568"; CHIP="rk3568"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-nano-3568_defconfig"; KERNEL_DEFCONFIG="armsbc-3568_defconfig"; DEVICE_TREE="rk3568-armsbc-nano.dts" ;;
+        8) BOARD="ARM-SBC-DCA-3588"; CHIP="rk3588"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-dca-3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3588-armsbc-dca.dts" ;;
+        9) BOARD="ARM-SBC-EDGE-3588"; CHIP="rk3588"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-edge-3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3588-armsbc-edge.dts" ;;
+        10) BOARD="ARM-SBC-RWA-3588"; CHIP="rk3588"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rwa-3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3588-armsbc-rwa.dts" ;;
         *) log "[ERROR] Invalid Rockchip board selection. Please try again."; continue ;;
       esac
+
+      export BOARD CHIP ARCH CROSS_COMPILE UBOOT_DEFCONFIG KERNEL_DEFCONFIG DEVICE_TREE
       break
+
     elif [[ "$BOARD_TYPE" == "2" ]]; then
       echo "Allwinner board selected."
-      COMPILE_SCRIPT="./sunxi-compile.sh"  # Assign Allwinner compile script
+      COMPILE_SCRIPT="./sunxi-compile.sh"
       echo -e "\033[1;32mSelect an Allwinner board:\033[0m"
       echo "1) ARM-SBC-RWA-A64"
       echo "2) ARM-SBC-RP-A40i"
@@ -164,17 +108,53 @@ select_board() {
         6) BOARD="ARM-SBC-XZ-A83T"; CHIP="a83t"; PROCESSOR_FAMILY="sun8i"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-xz-a83t_defconfig"; KERNEL_DEFCONFIG="armsbc-a83_defconfig"; DEVICE_TREE="sun8i-a83t-armsbc-xz.dts" ;;
         *) log "[ERROR] Invalid Allwinner board selection. Please try again."; continue ;;
       esac
+
+      export BOARD CHIP PROCESSOR_FAMILY ARCH CROSS_COMPILE UBOOT_DEFCONFIG KERNEL_DEFCONFIG DEVICE_TREE
       break
     else
       log "[ERROR] Invalid board type selection. Please try again."
     fi
   done
 
-  export BOARD CHIP ARCH CROSS_COMPILE UBOOT_DEFCONFIG KERNEL_DEFCONFIG DEVICE_TREE COMPILE_SCRIPT
-  log "Selected board: $BOARD with chip: $CHIP"
-  log "Detected architecture: $ARCH, Cross-compiler: $CROSS_COMPILE"
-  log "Compile script set to: $COMPILE_SCRIPT"
-  log "Device Tree file: $DEVICE_TREE"
+  log "[INFO] Selected board: $BOARD"
+  log "[INFO] Chip: $CHIP"
+  log "[INFO] Architecture: $ARCH"
+  log "[INFO] Processor Family (if applicable): $PROCESSOR_FAMILY"
+}
+
+# Function to clean and prepare build directories
+clean_build_directories() {
+  log "Cleaning previous build directories..."
+
+  # Remove u-boot directory
+  [ -d "u-boot" ] && rm -rf "u-boot"
+
+  # Find and remove any directory that starts with "linux-"
+  for linux_dir in linux-*; do
+    if [ -d "$linux_dir" ]; then
+      log "Removing directory: $linux_dir"
+      rm -rf "$linux_dir"
+    fi
+  done
+
+  log "Build directories cleaned."
+}
+
+prepare_output_directory() {
+  OUTPUT_DIR="$(pwd)/OUT-${BOARD}"  # Use absolute path for output directory
+  export OUTPUT_DIR
+
+  log "Preparing output directory: $OUTPUT_DIR..."
+
+  if [ -d "$OUTPUT_DIR" ]; then
+    log "Cleaning output directory contents..."
+    rm -rf "$OUTPUT_DIR"/* || { log "[ERROR] Failed to clean $OUTPUT_DIR."; exit 1; }
+  else
+    log "Creating output directory: $OUTPUT_DIR..."
+    mkdir -p "$OUTPUT_DIR" || { log "[ERROR] Failed to create $OUTPUT_DIR."; exit 1; }
+  fi
+
+  log "Output directory is ready."
 }
 
 # Function to download sources dynamically based on the build option
@@ -427,8 +407,9 @@ build_options() {
 # Main script execution
 log "Starting script execution..."
 install_packages
-prepare_output_directory
 select_board
+clean_build_directories
+prepare_output_directory
 build_options
 
 

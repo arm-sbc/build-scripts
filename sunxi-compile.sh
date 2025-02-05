@@ -80,25 +80,24 @@ apply_kernel_patches() {
 
 # Function to dynamically add DTB entry to Makefile
 add_dtb_entry() {
-  MAKEFILE_PATH="path/to/Makefile"  # Adjust this path as needed
-  NEW_DTB_ENTRY="$DEVICE_TREE_NAME.dtb"
+  MAKEFILE_PATH="u-boot/arch/arm/dts/Makefile"
+  NEW_DTB_ENTRY="${DEVICE_TREE%.dts}.dtb"
 
-  # Detect the correct family section in the Makefile
-  FAMILY_SECTION=$(grep -i "dtb-\$(CONFIG_MACH_$PROCESSOR_FAMILY)" "$MAKEFILE_PATH" | head -n 1)
+  # Find the correct family section in the Makefile
+  FAMILY_SECTION=$(grep -P "dtb-\$\(CONFIG_MACH_${PROCESSOR_FAMILY^^}\)" "$MAKEFILE_PATH")
 
   if [[ -z "$FAMILY_SECTION" ]]; then
-    error "Family section for $PROCESSOR_FAMILY not found in the Makefile."
+    echo "[ERROR] Family section for ${PROCESSOR_FAMILY^^} not found in the Makefile."
+    return 1
   fi
 
-  # Construct the line to add to the Makefile
-  NEW_LINE="    $NEW_DTB_ENTRY"
-
-  # Append the new DTB entry under the existing family section
-  if grep -q "$NEW_LINE" "$MAKEFILE_PATH"; then
-    log "DTB entry $NEW_DTB_ENTRY already exists in Makefile. Skipping addition."
+  # Check if DTB entry already exists
+  if grep -q "$NEW_DTB_ENTRY" "$MAKEFILE_PATH"; then
+    echo "[INFO] DTB entry $NEW_DTB_ENTRY already exists. Skipping addition."
   else
-    sed -i "/$FAMILY_SECTION/a $NEW_LINE" "$MAKEFILE_PATH"
-    log "Added $NEW_DTB_ENTRY to the Makefile under $FAMILY_SECTION."
+    # Append new DTB entry under the correct section
+    sed -i "/${FAMILY_SECTION}/a \\    $NEW_DTB_ENTRY \\" "$MAKEFILE_PATH"
+    echo "[INFO] Added $NEW_DTB_ENTRY to Makefile under $FAMILY_SECTION."
   fi
 }
 
@@ -159,10 +158,6 @@ compile_uboot() {
     done
   fi
 
-  # Clean the build directory
-  log "Cleaning the build directory..."
-  make distclean || log "Failed to clean the build directory. Continuing with existing files."
-
   # Configure U-Boot
   log "Configuring U-Boot with $UBOOT_DEFCONFIG..."
   make CROSS_COMPILE="$CROSS_COMPILE" "$UBOOT_DEFCONFIG" || error "Failed to configure U-Boot."
@@ -214,11 +209,9 @@ compile_uboot() {
   log "Building U-Boot with DEVICE_TREE=$DEVICE_TREE_NAME..."
   make CROSS_COMPILE="$CROSS_COMPILE" DEVICE_TREE="$DEVICE_TREE_NAME" $BL31_ARG $SCP_ARG -j$(nproc) || error "U-Boot compilation failed."
 
-  # Copy the Sunxi-specific output file
-  mkdir -p "$OUT_DIR"
-  log "Copying U-Boot output files to OUT directory..."
-  cp u-boot-sunxi-with-spl.bin "$OUT_DIR/" || error "Failed to copy u-boot-sunxi-with-spl.bin to $OUT_DIR."
-
+  # Copy the Sunxi-specific output file to the exported output directory
+  log "Copying U-Boot output files to OUT directory: $OUT_DIR"
+  cp u-boot-sunxi-with-spl.bin "$OUTPUT_DIR/" || error "Failed to copy u-boot-sunxi-with-spl.bin to $OUTPUT_DIR."
   log "U-Boot compilation and output copying completed successfully."
   cd - >/dev/null
 }
@@ -233,8 +226,7 @@ compile_kernel() {
 
   cd "$KERNEL_DIR" || error "Failed to enter kernel source directory."
 
-  # Clean and configure the kernel
-  make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" distclean || log "Failed to clean the build directory."
+  # Configure the kernel
   cp "../custom_configs/defconfig/$KERNEL_DEFCONFIG" .config || error "Failed to copy defconfig."
   make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" olddefconfig || error "Kernel configuration failed."
 
@@ -248,58 +240,62 @@ compile_kernel() {
   else
     log "Skipping menuconfig."
   fi
+  
+# Debug log
+log "OUTPUT_DIR is set to: $OUTPUT_DIR"
+ls -ld "$OUTPUT_DIR" || error "OUTPUT_DIR does not exist or cannot be accessed."
 
-  # Copy the updated .config to the OUT directory
-  CONFIG_OUTPUT="$OUT_DIR/config-$KERNEL_VERSION"
-  if [ -f ".config" ]; then
-    cp .config "$CONFIG_OUTPUT" || error "Failed to copy updated .config to $CONFIG_OUTPUT"
-    log "Copied updated kernel configuration to $CONFIG_OUTPUT"
-  else
-    error ".config file not found after kernel configuration."
-  fi
+# Copy the updated .config to the OUTPUT_DIR
+CONFIG_OUTPUT="$OUTPUT_DIR/config-$KERNEL_VERSION"
+if [ -f ".config" ]; then
+  log "Copying .config to $CONFIG_OUTPUT..."
+  cp .config "$CONFIG_OUTPUT" || error "Failed to copy updated .config to $CONFIG_OUTPUT."
+  log "Copied updated kernel configuration to $CONFIG_OUTPUT."
+else
+  error ".config file not found after kernel configuration."
+fi
 
-  # Compile the kernel image and modules
+  # Dynamically get the kernel version
+  KERNEL_VERSION=$(make -s kernelrelease)
+  log "Detected kernel version: $KERNEL_VERSION"
+
+  # Set the kernel image type
   if [[ "$ARCH" == "arm64" ]]; then
     KERNEL_IMAGE="Image"
   else
     KERNEL_IMAGE="zImage"
   fi
 
-  make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" -j$(nproc) "$KERNEL_IMAGE" modules || error "Kernel compilation failed."
-  make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" INSTALL_MOD_PATH="$OUT_DIR/tmp_modules" modules_install || error "Module installation failed."
+# Compile the kernel and modules
+log "Compiling kernel and modules..."
+make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" -j$(nproc) "$KERNEL_IMAGE" modules || error "Kernel compilation failed."
+make ARCH="$ARCH" CROSS_COMPILE="$CROSS_COMPILE" INSTALL_MOD_PATH="$OUTPUT_DIR" modules_install || error "Module installation failed."
 
-  # Copy only the kernel modules directory to the final OUT/modules location
-  MODULES_DIR="$OUT_DIR/modules"
-  mkdir -p "$MODULES_DIR"
-  KERNEL_MODULES_SRC="$OUT_DIR/tmp_modules/lib/modules/$KERNEL_VERSION"
-  KERNEL_MODULES_DEST="$MODULES_DIR/$KERNEL_VERSION"
+# Verify and log installed modules directory
+KERNEL_MODULES_SRC="$OUTPUT_DIR/lib/modules/$KERNEL_VERSION"
+if [ -d "$KERNEL_MODULES_SRC" ]; then
+  log "Kernel modules directory found at $KERNEL_MODULES_SRC."
+else
+  error "Kernel modules directory not found: $KERNEL_MODULES_SRC"
+fi
 
-  if [ -d "$KERNEL_MODULES_SRC" ]; then
-    cp -r "$KERNEL_MODULES_SRC" "$MODULES_DIR/" || error "Failed to copy kernel modules to $MODULES_DIR."
-    log "Copied kernel modules to $MODULES_DIR."
-  else
-    error "Kernel modules directory not found: $KERNEL_MODULES_SRC"
-  fi
+# Copy the kernel image to the output directory
+log "Copying kernel image to OUTPUT_DIR..."
+cp "arch/$ARCH/boot/$KERNEL_IMAGE" "$OUTPUT_DIR/" || error "Failed to copy $KERNEL_IMAGE to $OUTPUT_DIR."
+log "Copied $KERNEL_IMAGE to $OUTPUT_DIR."
 
-  # Clean up temporary modules directory
-  rm -rf "$OUT_DIR/tmp_modules"
+# Copy System.map with version suffix
+SYSTEM_MAP="System.map"
+SYSTEM_MAP_VERSIONED="$OUTPUT_DIR/System.map-$KERNEL_VERSION"
+if [ -f "$SYSTEM_MAP" ]; then
+  cp "$SYSTEM_MAP" "$SYSTEM_MAP_VERSIONED" || error "Failed to copy System.map to $OUTPUT_DIR with version suffix."
+  log "Copied System.map to $OUTPUT_DIR as System.map-$KERNEL_VERSION."
+else
+  log "System.map file not found."
+fi
 
-  # Copy the kernel image to the OUT directory without version suffix
-  KERNEL_OUTPUT="$OUT_DIR/$KERNEL_IMAGE"
-  cp "arch/$ARCH/boot/$KERNEL_IMAGE" "$KERNEL_OUTPUT" || error "Failed to copy $KERNEL_IMAGE to $OUT_DIR."
-  log "Copied $KERNEL_IMAGE to $OUT_DIR."
+log "Kernel compilation completed successfully."
 
-  # Rename and copy System.map to OUT directory with version suffix
-  SYSTEM_MAP="System.map"
-  SYSTEM_MAP_VERSIONED="$OUT_DIR/System.map-$KERNEL_VERSION"
-  if [ -f "$SYSTEM_MAP" ]; then
-    cp "$SYSTEM_MAP" "$SYSTEM_MAP_VERSIONED" || error "Failed to copy System.map to $OUT_DIR with version suffix."
-    log "Copied System.map to $OUT_DIR as System.map-$KERNEL_VERSION"
-  else
-    warn "System.map file not found."
-  fi
-
-  log "Kernel compilation completed successfully."
   cd - >/dev/null
 }
 
@@ -359,8 +355,8 @@ compile_dts() {
   GENERATED_DTB="$DTS_PATH/$(basename "${DEVICE_TREE%.dts}.dtb")"
   if [ -f "$GENERATED_DTB" ]; then
     log "Generated DTB file: $GENERATED_DTB"
-    mv "$GENERATED_DTB" "$SCRIPT_DIR/OUT/" || error "Failed to move DTB file to OUT directory."
-    log "DTB file moved to OUT directory: $SCRIPT_DIR/OUT/$(basename "$GENERATED_DTB")"
+    mv "$GENERATED_DTB" "$OUTPUT_DIR/" || error "Failed to move DTB file to OUT directory."
+    log "DTB file moved to OUT directory: $OUTPUT_DIR/$(basename "$GENERATED_DTB")"
   else
     error "DTB file not created: $GENERATED_DTB"
   fi
