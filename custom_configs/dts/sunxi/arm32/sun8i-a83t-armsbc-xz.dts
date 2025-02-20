@@ -102,7 +102,7 @@
 	usb-hub {
 		compatible = "smsc,usb3503";
 		initial-mode = <1>; /* initialize in HUB mode */
-		disabled-ports = <1>;
+		//disabled-ports = <1>;
 		intn-gpios = <&pio 6 13 GPIO_ACTIVE_HIGH>; /* PG13, assuming it's the interrupt pin */
 		reset-gpios = <&pio 6 12 GPIO_ACTIVE_LOW>; /* PG12, for hub reset */
 		connect-gpios = <&r_pio 0 6 GPIO_ACTIVE_HIGH>; /* PL6, assuming it's used for connectivity control */
@@ -121,8 +121,6 @@
 					    "Speaker", "Internal Speaker";
 		simple-audio-card,routing =
 				"Headphone Jack", "HP",
-				"Internal Speaker", "Speaker Amp OUTL",
-				"Speaker Amp INL", "SPKOUTL",
 				"Left DAC", "DACL",
 				"Right DAC", "DACR",
 				"ADCL", "Left ADC",
@@ -170,6 +168,8 @@
 
 &hdmi {
 	status = "okay";
+	hvcc-supply = <&reg_dldo1>;
+	#sound-dai-cells = <0>;
 };
 
 &hdmi_out {
