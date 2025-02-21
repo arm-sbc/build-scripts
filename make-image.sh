@@ -151,13 +151,26 @@ MOUNT_POINT="/mnt/${CHIP}_img"
 mkdir -p "$MOUNT_POINT"
 mount "${LOOP_DEVICE}p1" "$MOUNT_POINT" || { log "ERROR" "Failed to mount partition."; losetup -d "$LOOP_DEVICE"; exit 1; }
 
+# Detect kernel version dynamically
+KERNEL_VERSION=$(basename "$OUT_DIR/config-"* 2>/dev/null | cut -d'-' -f2-)
+if [ -n "$KERNEL_VERSION" ]; then
+  log "INFO" "Detected kernel version: $KERNEL_VERSION"
+else
+  log "WARN" "Kernel version not found, skipping config and System.map copy."
+fi
+
 # Copy essential files
 log "INFO" "Copying essential files..."
-cp -a "$OUT_DIR/rootfs"/* "$MOUNT_POINT/"
-cp "$OUT_DIR/zImage" "$MOUNT_POINT/boot/"
-cp "$OUT_DIR"/*.dtb "$MOUNT_POINT/boot/"
-cp "$OUT_DIR/config-*" "$MOUNT_POINT/boot/" 2>/dev/null
-cp "$OUT_DIR/System.map-*" "$MOUNT_POINT/boot/" 2>/dev/null
+mkdir -p "$MOUNT_POINT/boot"
+cp -a "$OUT_DIR/rootfs/"* "$MOUNT_POINT/"
+
+# Ensure kernel and dtb files exist before copying
+[ -f "$OUT_DIR/zImage" ] && cp "$OUT_DIR/zImage" "$MOUNT_POINT/boot/"
+[ -n "$(ls $OUT_DIR/*.dtb 2>/dev/null)" ] && cp "$OUT_DIR"/*.dtb "$MOUNT_POINT/boot/"
+
+# Copy config and System.map files if kernel version is detected
+[ -f "$OUT_DIR/config-$KERNEL_VERSION" ] && cp "$OUT_DIR/config-$KERNEL_VERSION" "$MOUNT_POINT/boot/" || log "WARN" "No config file found, skipping."
+[ -f "$OUT_DIR/System.map-$KERNEL_VERSION" ] && cp "$OUT_DIR/System.map-$KERNEL_VERSION" "$MOUNT_POINT/boot/" || log "WARN" "No System.map file found, skipping."
 
 # Configure extlinux
 log "INFO" "Configuring extlinux..."
@@ -169,18 +182,24 @@ LABEL Linux
     APPEND console=${SERIAL_CONSOLE},115200 root=/dev/mmcblk0p1 rootwait rw
 EOF
 
-# Download and extract firmware
-log "INFO" "Downloading firmware from Armbian..."
-FIRMWARE_URL="https://github.com/armbian/firmware/archive/refs/heads/master.zip"
-wget -q -O /tmp/firmware.zip "$FIRMWARE_URL" || { log "ERROR" "Failed to download firmware."; exit 1; }
-unzip -qo /tmp/firmware.zip -d /tmp/ && mv /tmp/firmware-master "$OUT_DIR/firmware"
-log "INFO" "Firmware downloaded and extracted."
+# Check if firmware is already downloaded
+if [ ! -d "$OUT_DIR" ]; then
+  log "INFO" "Firmware not found, downloading..."
+  log "INFO" "Downloading firmware from Armbian..."
+  FIRMWARE_URL="https://github.com/armbian/firmware/archive/refs/heads/master.zip"
+  wget -q -O "$OUT_DIR/firmware.zip" "$FIRMWARE_URL" || { log "ERROR" "Failed to download firmware."; exit 1; }
+  unzip -qo "$OUT_DIR/firmware.zip" -d "$OUT_DIR/firmware/"
+  rsync -a --ignore-existing "$OUT_DIR/firmware/" "$MOUNT_POINT/lib/firmware/"
+  else
+  log "INFO" "Firmware already exists, skipping download."
+  
+fi
+
 
 # Copy modules and firmware
 log "INFO" "Copying kernel modules and firmware..."
-cp -a "$OUT_DIR/lib/modules" "$MOUNT_POINT/lib/"
-mkdir -p "$MOUNT_POINT/lib/firmware"
-cp -a "$OUT_DIR/firmware"/* "$MOUNT_POINT/lib/firmware/"
+[ -d "$OUT_DIR/lib/modules" ] && cp -a "$OUT_DIR/lib/modules" "$MOUNT_POINT/lib/"
+
 
 # Unmount and finalize
 umount "$MOUNT_POINT"
