@@ -57,7 +57,7 @@
 		serial0 = &uart0;
 		ethernet0 = &rtl8152;
 		mmc0 = &mmc0;
-		mmc2 = &mmc1;
+		mmc1 = &mmc2;
 	};
 
 	chosen {
