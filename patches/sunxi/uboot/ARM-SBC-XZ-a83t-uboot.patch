@@ -13,7 +13,7 @@
 +CONFIG_MMC_SUNXI_SLOT_EXTRA=2
 +CONFIG_USB0_VBUS_PIN="AXP0-VBUS-ENABLE"
 +CONFIG_USB0_ID_DET="PH11"
-+CONFIG_USB1_VBUS_PIN="PD24"
++CONFIG_USB1_VBUS_PIN="PH4"
 +CONFIG_AXP_GPIO=y
 +# CONFIG_SYS_MALLOC_CLEAR_ON_INIT is not set
 +CONFIG_CONSOLE_MUX=y
@@ -29,8 +29,8 @@
 +CONFIG_USB_MUSB_HOST=y
 
 --- arch/arm/dts/sun8i-a83t-armsbc-xz.dts	1970-01-01 04:00:00.000000000 +0400
-+++ arch/arm/dts/sun8i-a83t-armsbc-xz.dts	2025-01-15 09:05:20.893728332 +0400
-@@ -0,0 +1,422 @@
++++ arch/arm/dts/sun8i-a83t-armsbc-xz.dts	2025-02-20 10:01:31.499221730 +0400
+@@ -0,0 +1,339 @@
 +/*
 + * Copyright 2024 Subair Mullappilly
 + *
@@ -104,20 +104,6 @@
 +		};
 +	};
 +
-+	leds {
-+		compatible = "gpio-leds";
-+
-+		led-0 {
-+			label = "bananapi-m3:blue:usr";
-+			gpios = <&axp_gpio 1 GPIO_ACTIVE_HIGH>;
-+		};
-+
-+		led-1 {
-+			label = "bananapi-m3:green:usr";
-+			gpios = <&axp_gpio 0 GPIO_ACTIVE_HIGH>;
-+		};
-+	};
-+
 +	reg_usb1_vbus: reg-usb1-vbus {
 +		compatible = "regulator-fixed";
 +		regulator-name = "usb1-vbus";
@@ -125,33 +111,17 @@
 +		regulator-max-microvolt = <5000000>;
 +		regulator-boot-on;
 +		enable-active-high;
-+		gpio = <&pio 3 24 GPIO_ACTIVE_HIGH>; /* PD24 */
++		gpio = <&pio 7 4 GPIO_ACTIVE_HIGH>; /* PH4 */
 +	};
 +
-+	wifi_pwrseq: wifi_pwrseq {
-+		compatible = "mmc-pwrseq-simple";
-+		clocks = <&ac100_rtc 1>;
-+		clock-names = "ext_clock";
-+		/* The WiFi low power clock must be 32768 Hz */
-+		assigned-clocks = <&ac100_rtc 1>;
-+		assigned-clock-rates = <32768>;
-+		/* enables internal regulator and de-asserts reset */
-+		reset-gpios = <&r_pio 0 2 GPIO_ACTIVE_LOW>; /* PL2 WL-PMU-EN */
-+	};
-+
-+	/*
-+	 * Power supply for the SATA disk, behind a USB-SATA bridge.
-+	 * Since it is a USB device, there is no consumer in the DT, so we
-+	 * have to keep this always on.
-+	 */
-+	regulator-sata-disk-pwr {
-+		compatible = "regulator-fixed";
-+		regulator-name = "sata-disk-pwr";
-+		regulator-min-microvolt = <5000000>;
-+		regulator-max-microvolt = <5000000>;
-+		regulator-always-on;
-+		enable-active-high;
-+		gpio = <&pio 3 25 GPIO_ACTIVE_HIGH>; /* PD25 */
++	usb-hub {
++		compatible = "smsc,usb3503";
++		initial-mode = <1>; /* initialize in HUB mode */
++		//disabled-ports = <1>;
++		intn-gpios = <&pio 6 13 GPIO_ACTIVE_HIGH>; /* PG13, assuming it's the interrupt pin */
++		reset-gpios = <&pio 6 12 GPIO_ACTIVE_LOW>; /* PG12, for hub reset */
++		connect-gpios = <&r_pio 0 6 GPIO_ACTIVE_HIGH>; /* PL6, assuming it's used for connectivity control */
++		refclk-frequency = <19200000>; /* Reference clock frequency */
 +	};
 +};
 +
@@ -174,17 +144,6 @@
 +	/* TODO GL830 USB-to-SATA bridge downstream w/ GPIO power controls */
 +};
 +
-+&emac {
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&emac_rgmii_pins>;
-+	phy-supply = <&reg_sw>;
-+	phy-handle = <&rgmii_phy>;
-+	phy-mode = "rgmii-id";
-+	allwinner,rx-delay-ps = <700>;
-+	allwinner,tx-delay-ps = <700>;
-+	status = "okay";
-+};
-+
 +&hdmi {
 +	status = "okay";
 +};
@@ -192,13 +151,6 @@
 +&hdmi_out {
 +	hdmi_out_con: endpoint {
 +		remote-endpoint = <&hdmi_con_in>;
-+	};
-+};
-+
-+&mdio {
-+	rgmii_phy: ethernet-phy@1 {
-+		compatible = "ethernet-phy-ieee802.3-c22";
-+		reg = <1>;
 +	};
 +};
 +
@@ -211,28 +163,11 @@
 +	status = "okay";
 +};
 +
-+&mmc1 {
-+	vmmc-supply = <&reg_dldo1>;
-+	vqmmc-supply = <&reg_dldo1>;
-+	mmc-pwrseq = <&wifi_pwrseq>;
-+	bus-width = <4>;
-+	non-removable;
-+	status = "okay";
-+
-+	brcmf: wifi@1 {
-+		reg = <1>;
-+		compatible = "brcm,bcm4329-fmac";
-+		interrupt-parent = <&r_pio>;
-+		interrupts = <0 3 IRQ_TYPE_LEVEL_LOW>;
-+		interrupt-names = "host-wake";
-+	};
-+};
-+
 +&mmc2 {
 +	pinctrl-names = "default";
 +	pinctrl-0 = <&mmc2_8bit_emmc_pins>;
 +	vmmc-supply = <&reg_dcdc1>;
-+	vqmmc-supply = <&reg_dcdc1>;
++	vqmmc-supply = <&reg_aldo1>;
 +	bus-width = <8>;
 +	non-removable;
 +	cap-mmc-hw-reset;
@@ -419,24 +354,6 @@
 +	status = "okay";
 +};
 +
-+&uart1 {
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&uart1_pins>, <&uart1_rts_cts_pins>;
-+	uart-has-rtscts;
-+	status = "okay";
-+
-+	bluetooth {
-+		compatible = "brcm,bcm43438-bt";
-+		clocks = <&ac100_rtc 1>;
-+		clock-names = "lpo";
-+		vbat-supply = <&reg_dldo1>;
-+		vddio-supply = <&reg_dldo1>;
-+		device-wakeup-gpios = <&pio 7 9 GPIO_ACTIVE_HIGH>; /* PH9 */
-+		host-wakeup-gpios = <&r_pio 0 5 GPIO_ACTIVE_HIGH>; /* PL5 */
-+		shutdown-gpios = <&r_pio 0 4 GPIO_ACTIVE_HIGH>; /* PL4 */
-+	};
-+};
-+
 +&usb_otg {
 +	dr_mode = "otg";
 +	status = "okay";
@@ -453,3 +370,13 @@
 +	usb1_vbus-supply = <&reg_usb1_vbus>;
 +	status = "okay";
 +};
+
+--- drivers/mmc/sunxi_mmc.c	2025-02-02 09:38:07.193550931 +0400
++++ drivers/mmc/sunxi_mmc.c	2025-02-21 06:55:57.585718543 +0400
+@@ -61,6 +61,7 @@
+ 	       IS_ENABLED(CONFIG_MACH_SUN50I_H5) ||
+ 	       IS_ENABLED(CONFIG_SUN50I_GEN_H6) ||
+ 	       IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2) ||
++	       IS_ENABLED(CONFIG_MACH_SUN8I_A83T) ||
+ 	       IS_ENABLED(CONFIG_MACH_SUN8I_R40);
+ }
