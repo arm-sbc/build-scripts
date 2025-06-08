@@ -87,7 +87,7 @@ index 79800959b797..3b62e037772a 100644
 +					<0 0 0 2 &pcie1_intc 1>,
 +					<0 0 0 3 &pcie1_intc 2>,
 +					<0 0 0 4 &pcie1_intc 3>;
-+			linux,pci-domain = <0>;
++			linux,pci-domain = <1>;
 +			max-link-speed = <2>;
 +			num-ib-windows = <8>;
 +			num-viewport = <8>;
