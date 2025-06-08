@@ -34,12 +34,16 @@ install_packages() {
     log "All required system dependencies are already installed."
   fi
 
-  log "Checking and installing required Python packages..."
+  log "Checking and installing required Python packages globally..."
   REQUIRED_PYTHON_PACKAGES=("pyelftools")
+
   for pkg in "${REQUIRED_PYTHON_PACKAGES[@]}"; do
     if ! python3 -m pip show "$pkg" > /dev/null 2>&1; then
-      log "Installing Python package: $pkg"
-      python3 -m pip install "$pkg" || { log "[ERROR] Failed to install Python package: $pkg. Exiting."; exit 1; }
+      log "Installing Python package globally: $pkg"
+      python3 -m pip install --break-system-packages "$pkg" || {
+        log "[ERROR] Failed to install Python package: $pkg. Exiting."
+        exit 1
+      }
     else
       log "Python package $pkg is already installed."
     fi
@@ -85,7 +89,7 @@ select_board() {
         9) BOARD="ARM-SBC-EDGE-3576"; CHIP="rk3576"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-edge-rk3576_defconfig"; KERNEL_DEFCONFIG="armsbc-3576_defconfig"; DEVICE_TREE="rk3576-armsbc-edge.dts" ;;
         10) BOARD="ARM-SBC-DCA-3588"; CHIP="rk3588"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-dca-rk3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3568-armsbc-dca.dts" ;;
         11) BOARD="ARM-SBC-EDGE-3588"; CHIP="rk3588"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-edge-rk3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3588-armsbc-edge.dts" ;;
-        12) BOARD="ARM-SBC-RWA-3568"; CHIP="rk3568"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rwa-rk3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3588-armsbc-rwa.dts" ;;
+        12) BOARD="ARM-SBC-RWA-3588"; CHIP="rk3568"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rwa-rk3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3588-armsbc-rwa.dts" ;;
         *) log "[ERROR] Invalid Rockchip board selection. Please try again."; continue ;;
       esac
 
