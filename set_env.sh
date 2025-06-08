@@ -9,12 +9,13 @@ log() {
 
 # Function to install required packages
 install_packages() {
-  log "Checking and installing required dependencies..."
+  log "Checking and installing required system dependencies..."
+
   REQUIRED_PACKAGES=(
     "build-essential" "gcc" "gcc-arm-none-eabi" "make" "swig" "gcc-arm-linux-gnueabihf"
     "libssl-dev" "curl" "bison" "flex" "git" "wget" "bc" "python3" "libncurses-dev"
     "libgnutls28-dev" "uuid-dev" "python3-pip" "device-tree-compiler"
-    "gcc-aarch64-linux-gnu" "g++-aarch64-linux-gnu" "qemu" "qemu-user"
+    "gcc-aarch64-linux-gnu" "g++-aarch64-linux-gnu" "debootstrap" "qemu-user"
     "qemu-user-static" "binfmt-support"
   )
   MISSING_PACKAGES=()
@@ -28,7 +29,10 @@ install_packages() {
   if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
     log "Installing missing packages: ${MISSING_PACKAGES[*]}"
     sudo apt update
-    sudo apt install -y "${MISSING_PACKAGES[@]}" || { log "[ERROR] Failed to install some packages. Exiting."; exit 1; }
+    sudo apt install -y "${MISSING_PACKAGES[@]}" || {
+      log "[ERROR] Failed to install some packages. Exiting."
+      exit 1
+    }
     log "All required system packages have been installed."
   else
     log "All required system dependencies are already installed."
@@ -40,7 +44,7 @@ install_packages() {
   for pkg in "${REQUIRED_PYTHON_PACKAGES[@]}"; do
     if ! python3 -m pip show "$pkg" > /dev/null 2>&1; then
       log "Installing Python package globally: $pkg"
-      python3 -m pip install --break-system-packages "$pkg" || {
+      python3 -m pip install --user "$pkg" || {
         log "[ERROR] Failed to install Python package: $pkg. Exiting."
         exit 1
       }
