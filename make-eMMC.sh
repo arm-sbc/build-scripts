@@ -5,8 +5,8 @@ OUT_DIR="OUT-$BOARD"
 IMAGE_DIR="$OUT_DIR"
 OUT_UPDATE_IMG="$OUT_DIR/update-$BOARD.img"
 RAW_IMG="$OUT_DIR/update.raw.img"
-PARAMETER_FILE="rk-tools/parameter.txt"
-PACKAGE_FILE="rk-tools/package-file"
+PARAMETER_FILE="rk-tools/${CHIP}-parameter.txt"
+PACKAGE_FILE="rk-tools/${CHIP}-package-file"
 AFPTOOL="rk-tools/afptool"
 RKIMAGEMAKER="rk-tools/rkImageMaker"
 RKBOOT_INI="rkbin/RKBOOT/${CHIP^^}MINIALL.ini"
@@ -63,6 +63,10 @@ case "$CHIP" in
     CONSOLE="ttyS0"
     BAUD="1500000"
     ;;
+  rk3288|rk3128)
+    CONSOLE="ttyS2"
+    BAUD="115200"
+    ;;
   *)
     CONSOLE="ttyS2"
     BAUD="1500000"
@@ -73,7 +77,7 @@ cat > "$EXTLINUX_DIR/extlinux.conf" <<EOF
 LABEL Linux ARB-SBC
     KERNEL /Image
     FDT /$(basename "$DTB_FILE")
-    APPEND console=$CONSOLE,$BAUD root=/dev/mmcblk0p5 rw rootwait init=/sbin/init
+    APPEND console=$CONSOLE,$BAUD root=/dev/mmcblk0p4 rw rootwait init=/sbin/init
 EOF
 
 #--- Generate ext2-based boot.img ---#
