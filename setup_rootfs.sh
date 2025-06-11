@@ -127,7 +127,6 @@ prepare_rootfs() {
   "
 }
 
-
 create_fresh_rootfs() {
     FRESH_DIR="$OUTPUT_DIR/fresh_$VERSION"
     info "Preparing fresh rootfs in $FRESH_DIR for $BOARD ($ARCH)..."
@@ -315,5 +314,75 @@ case $OPTION in
         ;;
 esac
 
-info "Rootfs creation script completed successfully. To create SD card/eMMC images please run ./mk-image.sh. All files are in the OUT-ARM-SBC-XXXX folder."
+#--- Create rootfs.img for firmware packaging ---#
+info "Packing rootfs.img from prepared root filesystem..."
+
+ROOTFS_SRC="$OUTPUT_DIR/rootfs"
+ROOTFS_IMG="$OUTPUT_DIR/rootfs.img"
+TMP_MNT="mnt_rootfs"
+SIZE_MB=2048
+
+info "Allocating $SIZE_MB MB for rootfs.img..."
+rm -f "$ROOTFS_IMG"
+dd if=/dev/zero of="$ROOTFS_IMG" bs=1M count=$SIZE_MB
+mkfs.ext4 -F "$ROOTFS_IMG"
+
+mkdir -p "$TMP_MNT"
+sudo mount "$ROOTFS_IMG" "$TMP_MNT"
+sudo cp -a "$ROOTFS_SRC"/* "$TMP_MNT/"
+
+if [ -d "$OUTPUT_DIR/lib/modules" ]; then
+    info "Copying kernel modules..."
+    sudo mkdir -p "$TMP_MNT/lib/modules"
+    sudo cp -a "$OUTPUT_DIR/lib/modules/"* "$TMP_MNT/lib/modules/"
+fi
+
+echo "[INFO] Cloning Armbian firmware repository..."
+git clone --depth=1 https://github.com/armbian/firmware.git /tmp/armbian-firmware || {
+    warning "Failed to clone Armbian firmware repository. Skipping firmware copy."
+    FIRMWARE_CLONED=0
+}
+
+if [ -d "/tmp/armbian-firmware" ]; then
+    echo "[INFO] Copying firmware into rootfs..."
+    sudo mkdir -p "$ROOTFS_TMP_MNT/lib/firmware"
+    sudo rsync -a --delete /tmp/armbian-firmware/ "$TMP_MNT/lib/firmware/"
+    rm -rf /tmp/armbian-firmware
+fi
+
+sudo umount "$TMP_MNT"
+rm -rf "$TMP_MNT"
+
+info "rootfs.img created at $ROOTFS_IMG"
+
+#--- Prompt to create Rockchip images ---#
+echo
+prompt "Do you want to create Rockchip images now?"
+echo "1. Create SD card image"
+echo "2. Create eMMC image"
+echo "3. Create both"
+echo "4. Skip"
+prompt "Enter your choice (1/2/3/4):"
+read -r IMAGE_OPTION
+
+case $IMAGE_OPTION in
+    1)
+        ./make-sdcard.sh || error "Failed to create SD card image."
+        ;;
+    2)
+        ./make-eMMC.sh || error "Failed to create eMMC image."
+        ;;
+    3)
+        ./make-sdcard.sh || error "Failed to create SD card image."
+        ./make-eMMC.sh || error "Failed to create eMMC image."
+        ;;
+    4)
+        info "Skipping image creation."
+        ;;
+    *)
+        warning "Invalid choice. Skipping image creation."
+        ;;
+esac
+
+info "Rootfs creation and image options completed."
 

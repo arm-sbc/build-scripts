@@ -175,23 +175,15 @@ prepare_output_directory() {
 
 # Function to download sources dynamically based on the build option
 download_sources() {
-  case "$BUILD_OPTION" in
+ case "$BUILD_OPTION" in
     "uboot"|"all")
       log "Downloading U-Boot source..."
       if [ ! -d "u-boot" ]; then
         git clone https://github.com/u-boot/u-boot.git || { log "[ERROR] Failed to clone U-Boot repository."; exit 1; }
         cd u-boot || { log "[ERROR] Failed to enter U-Boot directory."; exit 1; }
-        # Fetch all tags and determine the latest stable version
-        log "Fetching U-Boot tags to determine the latest stable version..."
-        git fetch --tags || { log "[ERROR] Failed to fetch tags from U-Boot repository."; exit 1; }
-        STABLE_TAG=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
-        
-        if [ -z "$STABLE_TAG" ]; then
-          log "[ERROR] Failed to determine the latest stable version of U-Boot. Falling back to the main branch."
-        else
-          log "Latest stable U-Boot version determined: $STABLE_TAG"
-          git checkout -b "$STABLE_TAG-branch" "$STABLE_TAG" || { log "[ERROR] Failed to checkout U-Boot stable version $STABLE_TAG."; exit 1; }
-        fi
+
+        log "Checking out master branch of U-Boot..."
+        git checkout master || { log "[ERROR] Failed to checkout master branch."; exit 1; }
         cd - > /dev/null
       else
         log "U-Boot source already exists. Skipping download."
