@@ -102,7 +102,7 @@ genext2fs -b "$BLOCKS" -B "$BLOCK_SIZE" -d "$BOOT_DIR" -i "$INODES" -U "$BOOT_IM
 
 #--- Generate raw image with afptool ---#
 echo "[INFO] Copying parameter.txt into OUT_DIR..."
-cp "$PARAMETER_FILE" "$OUT_DIR/" || { echo "[ERROR] Failed to copy parameter.txt to $OUT_DIR"; pause; }
+cp "$PARAMETER_FILE" "$OUT_DIR/parameter.txt" || { echo "[ERROR] Failed to copy parameter.txt to $OUT_DIR"; pause; }
 
 echo "[INFO] Packing raw image using afptool..."
 $AFPTOOL -pack "$OUT_DIR" "$RAW_IMG" "$PACKAGE_FILE" || pause
