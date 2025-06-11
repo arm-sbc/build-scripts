@@ -15,3 +15,5 @@ if the build fails install the missing dependencies.
 select the board
 
 follow instructions
+
+The script will download upstream kernel, uboot, and will provide an option for rootfs creation for ubuntu and debian, and will create a single image which can be flashed in to the board
