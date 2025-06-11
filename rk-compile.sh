@@ -80,13 +80,13 @@ apply_kernel_patches() {
     return
   fi
 
-  log "Applying kernel patches from $PATCH_DIR..."
-  for patch in "$PATCH_DIR"/*.patch; do
+  log "Applying kernel patches for $CHIP from $PATCH_DIR..."
+  for patch in "$PATCH_DIR/${CHIP}-"*.patch; do
     [ -f "$patch" ] || continue
-    log "Applying patch $patch..."
+    log "Applying patch $(basename "$patch")..."
     (
       cd "linux-$KERNEL_VERSION" || error "Failed to enter kernel directory."
-      patch -Np1 -i "../$patch" || log "Patch $patch already applied or conflicts detected. Skipping."
+      patch -Np1 -i "../$patch" || log "Patch $(basename "$patch") already applied or conflicts detected. Skipping."
     )
   done
 
@@ -313,7 +313,7 @@ compile_dts() {
 
   # Copy board-specific DTS files
   log "Copying board-specific DTS files from $DTS_SOURCE_DIR to $DTS_PATH"
-  cp "$DTS_SOURCE_DIR"/*.dts "$DTS_PATH/" || error "Failed to copy board DTS files to $DTS_PATH"
+  cp "$DTS_SOURCE_DIR/${CHIP}-"*.dts "$DTS_PATH/" || log "No matching DTS files found for $CHIP in $DTS_SOURCE_DIR. Skipping DTS copy."
 
   # Copy required .dtsi include files from rockchip directory
   ROCKCHIP_INCLUDE_DIR="$SCRIPT_DIR/linux-${KERNEL_VERSION}/arch/$ARCH/boot/dts/rockchip"
