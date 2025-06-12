@@ -48,6 +48,7 @@ if [ ! -f "$LOADER_BIN" ]; then
   [ -f "$GENERATED_LOADER" ] || { echo "[ERROR] Failed to generate loader."; pause; }
 
   cp "$GENERATED_LOADER" "$LOADER_BIN"
+  cp "$GENERATED_LOADER" "$OUT_DIR/$(basename "$GENERATED_LOADER")"  # For afptool compatibility
   echo "[INFO] Loader generated and copied to: $LOADER_BIN"
 fi
 
