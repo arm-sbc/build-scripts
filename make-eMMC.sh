@@ -19,24 +19,42 @@ pause() {
 }
 
 #--- Generate Loader if not found ---#
-LOADER_BIN="$OUT_DIR/${CHIP}_spl_loader_v1.09.107.bin"
+LOADER_BIN="$OUT_DIR/${CHIP}_loader.bin"
+
 if [ ! -f "$LOADER_BIN" ]; then
   echo "[INFO] Loader not found. Attempting to generate using boot_merger..."
+
   [ -x "$BOOT_MERGER" ] || chmod +x "$BOOT_MERGER"
   [ -f "$RKBOOT_INI" ] || { echo "[ERROR] Missing RKBOOT ini file: $RKBOOT_INI"; pause; }
+
   pushd rkbin > /dev/null
   ./tools/boot_merger "RKBOOT/${CHIP^^}MINIALL.ini" || pause
   popd > /dev/null
-  GENERATED_LOADER=$(find rkbin -maxdepth 1 -name "${CHIP}_spl_loader_*.bin" | sort | tail -n1)
+
+  # Choose loader pattern based on SoC
+  case "$CHIP" in
+    rk3566|rk3568|rk3576|rk3588|rk3562|rk356x)
+      GENERATED_LOADER=$(find rkbin rkbin/bin -type f -name "${CHIP}_spl_loader_*.bin" | sort | tail -n1)
+      ;;
+    rk3399|rk3288|rk3128)
+      GENERATED_LOADER=$(find rkbin rkbin/bin -type f -name "${CHIP}_loader_*.bin" ! -name "*spl*" | sort | tail -n1)
+      ;;
+    *)
+      # Generic fallback (tries both)
+      GENERATED_LOADER=$(find rkbin rkbin/bin -type f \( -name "${CHIP}_spl_loader_*.bin" -o -name "${CHIP}_loader_*.bin" \) | sort | tail -n1)
+      ;;
+  esac
+
   [ -f "$GENERATED_LOADER" ] || { echo "[ERROR] Failed to generate loader."; pause; }
+
   cp "$GENERATED_LOADER" "$LOADER_BIN"
   echo "[INFO] Loader generated and copied to: $LOADER_BIN"
 fi
 
 #--- Validate Inputs ---#
 echo "[INFO] Validating required files..."
-[ -f "$PARAMETER_FILE" ] || { echo "[ERROR] parameter.txt not found at $PARAMETER_FILE"; pause; }
-[ -f "$PACKAGE_FILE" ] || { echo "[ERROR] $PACKAGE_FILE not found at $PACKAGE_FILE"; pause; }
+[ -f "$PARAMETER_FILE" ] || { echo "[ERROR] parameter file not found: $PARAMETER_FILE"; pause; }
+[ -f "$PACKAGE_FILE" ] || { echo "[ERROR] package file not found: $PACKAGE_FILE"; pause; }
 [ -f "$LOADER_BIN" ] || { echo "[ERROR] Loader binary not found at $LOADER_BIN"; pause; }
 
 #--- Prepare boot directory with kernel, dtb, config, System.map, extlinux.conf ---#
