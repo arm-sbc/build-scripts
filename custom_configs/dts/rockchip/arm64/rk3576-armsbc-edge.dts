@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright (c) 2024 Firefly Technology Co. Ltd
- * Copyright (c) 2024 Heiko Stuebner <heiko@sntech.de>
  */
 
 /dts-v1/;
@@ -333,8 +331,8 @@
 	phy-mode = "rgmii-rxid";
 	phy-handle = <&rgmii_phy0>;
 	status = "okay";
-	rx_delay = <0x00>;
-	tx_delay = <0x43>;
+	//rx_delay = <0x00>;
+	tx_delay = <0x20>;
 };
 
 &gmac1 {
@@ -349,8 +347,23 @@
 		     &ethm0_clk1_25m_out>;
 	phy-handle = <&rgmii_phy1>;
 	status = "okay";
-	rx_delay = <0x00>;
-	tx_delay = <0x43>;
+	//rx_delay = <0x00>;
+	tx_delay = <0x20>;
+};
+
+&mdio0 {
+	rgmii_phy0: phy@1 {
+		compatible = "ethernet-phy-id001c.c916";
+		reg = <0x1>;
+		reset-gpios = <&gpio2 RK_PB3 GPIO_ACTIVE_LOW>;
+		reset-delay-us = <20000>;
+		reset-post-delay-us = <100000>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&rtl8211a_rst>;
+		clocks = <&cru REFCLKO25M_GMAC0_OUT>;
+
+		
+	};
 };
 
 &mdio1 {
@@ -363,19 +376,6 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&rtl8211b_rst>;
 		clocks = <&cru REFCLKO25M_GMAC1_OUT>;
-	};
-};
-
-&mdio0 {
-	rgmii_phy0: phy@1 {
-		compatible = "ethernet-phy-id001c.c916";
-		reg = <0x1>;
-		clocks = <&cru REFCLKO25M_GMAC0_OUT>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&rtl8211a_rst>;
-		reset-delay-us = <20000>;
-		reset-post-delay-us = <100000>;
-		reset-gpios = <&gpio2 RK_PB3 GPIO_ACTIVE_LOW>;
 	};
 };
 
