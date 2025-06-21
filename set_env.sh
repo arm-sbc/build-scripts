@@ -16,7 +16,7 @@ install_packages() {
     "libssl-dev" "curl" "bison" "flex" "git" "wget" "bc" "python3" "libncurses-dev"
     "libgnutls28-dev" "uuid-dev" "python3-pip" "device-tree-compiler"
     "gcc-aarch64-linux-gnu" "g++-aarch64-linux-gnu" "debootstrap" "qemu-user"
-    "qemu-user-static" "binfmt-support" "pipx" "picocom"
+    "qemu-user-static" "binfmt-support" "picocom" "python3-pyelftools"
   )
   MISSING_PACKAGES=()
 
@@ -38,29 +38,11 @@ install_packages() {
     log "All required system dependencies are already installed."
   fi
 
-  log "Checking and installing required Python packages using pipx..."
-
-  # Ensure pipx is initialized correctly
+  # Optionally ensure pipx is installed if you use it elsewhere
   if ! command -v pipx >/dev/null 2>&1; then
-    log "[ERROR] pipx is not available after installation. Exiting."
-    exit 1
+    log "Installing pipx (optional)"
+    sudo apt install -y pipx && pipx ensurepath
   fi
-
-  pipx ensurepath
-
-  REQUIRED_PYTHON_PACKAGES=("pyelftools")
-
-  for pkg in "${REQUIRED_PYTHON_PACKAGES[@]}"; do
-    if ! pipx list | grep -qw "$pkg"; then
-      log "Installing Python package using pipx: $pkg"
-      pipx install "$pkg" || {
-        log "[ERROR] Failed to install Python package: $pkg with pipx. Exiting."
-        exit 1
-      }
-    else
-      log "Python package $pkg is already installed via pipx."
-    fi
-  done
 }
 
 # Function to select board type and specific board
