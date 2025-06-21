@@ -4,10 +4,8 @@
 @@ -0,0 +1,23 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 +/*
-+ * Copyright (c) 2022 FriendlyElec Computer Tech. Co., Ltd.
-+ * (http://www.friendlyelec.com)
++ * Copyright (c) 2025 ARM-SBC- Dubai
 + *
-+ * Copyright (c) 2023 Tianling Shen <cnsztl@gmail.com>
 + */
 +
 +#include "rk356x-u-boot.dtsi"
