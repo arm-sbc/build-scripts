@@ -212,7 +212,7 @@
 +CONFIG_SPL_GPIO=y
 +CONFIG_SF_DEFAULT_SPEED=24000000
 +CONFIG_SF_DEFAULT_MODE=0x2000
-+CONFIG_DEFAULT_DEVICE_TREE="rockchip/rk3568-armsbc-rp"
++CONFIG_DEFAULT_DEVICE_TREE="rockchip/rk3568-armsbc-nano"
 +CONFIG_ROCKCHIP_RK3568=y
 +CONFIG_ROCKCHIP_SPI_IMAGE=y
 +CONFIG_SPL_SERIAL=y
@@ -229,7 +229,7 @@
 +CONFIG_SPL_FIT_SIGNATURE=y
 +CONFIG_SPL_LOAD_FIT=y
 +CONFIG_LEGACY_IMAGE_FORMAT=y
-+CONFIG_DEFAULT_FDT_FILE="rockchip/rk3568-armsbc-rp.dtb"
++CONFIG_DEFAULT_FDT_FILE="rockchip/rk3568-armsbc-nano.dtb"
 +# CONFIG_DISPLAY_CPUINFO is not set
 +CONFIG_DISPLAY_BOARDINFO_LATE=y
 +CONFIG_SPL_MAX_SIZE=0x40000
@@ -1569,8 +1569,8 @@
 +	status = "okay";
 +};
 
---- dts/upstream/src/arm64/rockchip/rk3568-armsbc-rp-3568.dts	1970-01-01 04:00:00.000000000 +0400
-+++ dts/upstream/src/arm64/rockchip/rk3568-armsbc-rp-3568.dts	2025-06-04 07:46:37.301542565 +0400
+--- dts/upstream/src/arm64/rockchip/rk3568-armsbc-nano.dts	1970-01-01 04:00:00.000000000 +0400
++++ dts/upstream/src/arm64/rockchip/rk3568-armsbc-nano.dts	2025-06-04 07:46:37.301542565 +0400
 @@ -0,0 +1,905 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +/*

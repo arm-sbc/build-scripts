@@ -1,22 +1,76 @@
 #!/bin/bash
 set -e
-#--- Paths and Tools ---#
-OUT_DIR="OUT-$BOARD"
-IMAGE_DIR="$OUT_DIR"
-OUT_UPDATE_IMG="$OUT_DIR/update-$BOARD.img"
-RAW_IMG="$OUT_DIR/update.raw.img"
-PARAMETER_FILE="rk-tools/${CHIP}-parameter.txt"
-PACKAGE_FILE="rk-tools/${CHIP}-package-file"
-AFPTOOL="rk-tools/afptool"
-RKIMAGEMAKER="rk-tools/rkImageMaker"
-RKBOOT_INI="rkbin/RKBOOT/${CHIP^^}MINIALL.ini"
-BOOT_MERGER="rkbin/tools/boot_merger"
 
 pause() {
   echo "[ERROR] Press any key to quit."
   read -n1 -s
   exit 1
 }
+
+#--- Prompt for OUT_DIR if multiple exist ---#
+if [ -z "$OUT_DIR" ]; then
+  OUT_DIRS=($(find . -maxdepth 1 -type d -name 'OUT-ARM-SBC-*' | sed 's|^\./||'))
+
+  if [ ${#OUT_DIRS[@]} -eq 0 ]; then
+    echo "[ERROR] No OUT-ARM-SBC-* directory found."
+    pause
+  elif [ ${#OUT_DIRS[@]} -eq 1 ]; then
+    OUT_DIR="${OUT_DIRS[0]}"
+    echo "[INFO] Auto-selected OUT_DIR: $OUT_DIR"
+  else
+    echo "[PROMPT] Multiple OUT directories found. Please choose:"
+    select dir in "${OUT_DIRS[@]}"; do
+      if [ -n "$dir" ]; then
+        OUT_DIR="$dir"
+        break
+      fi
+    done
+  fi
+fi
+
+#--- Derive BOARD from OUT_DIR ---#
+if [ -z "$BOARD" ]; then
+  BOARD=$(echo "$OUT_DIR" | sed 's/^OUT-ARM-SBC-//')
+  echo "[INFO] Auto-detected BOARD: $BOARD"
+fi
+
+#--- Derive CHIP from DTB ---#
+if [ -z "$CHIP" ]; then
+  DTB_PATH=$(find "$OUT_DIR" -name '*.dtb' | head -n1)
+  if [ -n "$DTB_PATH" ]; then
+    CHIP=$(basename "$DTB_PATH" | cut -d'-' -f1)
+    echo "[INFO] Detected CHIP from DTB: $CHIP"
+  else
+    echo "[ERROR] Could not auto-detect CHIP. Please set it manually."
+    pause
+  fi
+fi
+
+
+#--- Paths and Tools ---#
+#OUT_DIR="OUT-$BOARD"
+IMAGE_DIR="$OUT_DIR"
+OUT_UPDATE_IMG="$OUT_DIR/update-$BOARD.img"
+RAW_IMG="$OUT_DIR/update.raw.img"
+
+#--- Auto-detect CHIP from DTB in OUT_DIR ---#
+if [ -z "$CHIP" ]; then
+  DTB_PATH=$(find "$OUT_DIR" -name '*.dtb' | head -n1)
+  if [ -n "$DTB_PATH" ]; then
+    CHIP=$(basename "$DTB_PATH" | cut -d'-' -f1)
+    echo "[INFO] Detected CHIP from DTB: $CHIP"
+  else
+    echo "[ERROR] Could not auto-detect CHIP. Please set it manually."
+    pause
+  fi
+fi
+
+PARAMETER_FILE="rk-tools/${CHIP}-parameter.txt"
+PACKAGE_FILE="rk-tools/${CHIP}-package-file"
+AFPTOOL="rk-tools/afptool"
+RKIMAGEMAKER="rk-tools/rkImageMaker"
+RKBOOT_INI="rkbin/RKBOOT/${CHIP^^}MINIALL.ini"
+BOOT_MERGER="rkbin/tools/boot_merger"
 
 #--- Generate Loader if not found ---#
 LOADER_BIN="$OUT_DIR/${CHIP}_loader.bin"
@@ -27,23 +81,31 @@ if [ ! -f "$LOADER_BIN" ]; then
   [ -x "$BOOT_MERGER" ] || chmod +x "$BOOT_MERGER"
   [ -f "$RKBOOT_INI" ] || { echo "[ERROR] Missing RKBOOT ini file: $RKBOOT_INI"; pause; }
 
-  pushd rkbin > /dev/null
-  ./tools/boot_merger "RKBOOT/${CHIP^^}MINIALL.ini" || pause
-  popd > /dev/null
+	pushd rkbin > /dev/null
+	./tools/boot_merger "RKBOOT/${CHIP^^}MINIALL.ini" || pause
+	echo "[DEBUG] Contents of rkbin after boot_merger:"
+	ls -lh *.bin bin/ || true
+	popd > /dev/null
 
-  # Choose loader pattern based on SoC
+  # Determine CHIP_FAMILY for special cases like rk3566/rk3568
   case "$CHIP" in
-    rk3566|rk3568|rk3576|rk3588|rk3562|rk356x)
-      GENERATED_LOADER=$(find rkbin rkbin/bin -type f -name "${CHIP}_spl_loader_*.bin" | sort | tail -n1)
-      ;;
-    rk3399|rk3288|rk3128)
-      GENERATED_LOADER=$(find rkbin rkbin/bin -type f -name "${CHIP}_loader_*.bin" ! -name "*spl*" | sort | tail -n1)
+    rk3566|rk3568)
+      CHIP_FAMILY="rk356x"
       ;;
     *)
-      # Generic fallback (tries both)
-      GENERATED_LOADER=$(find rkbin rkbin/bin -type f \( -name "${CHIP}_spl_loader_*.bin" -o -name "${CHIP}_loader_*.bin" \) | sort | tail -n1)
+      CHIP_FAMILY="$CHIP"
       ;;
   esac
+
+  # Unified loader detection based on CHIP and CHIP_FAMILY
+  GENERATED_LOADER=$(find rkbin rkbin/bin -maxdepth 1 -type f \( \
+    -iname "${CHIP}_spl_loader_*.bin" -o \
+    -iname "${CHIP}_loader_*.bin" -o \
+    -iname "${CHIP_FAMILY}_spl_loader_*.bin" -o \
+    -iname "${CHIP_FAMILY}_loader_*.bin" \
+  \) | sort | tail -n1)
+
+  echo "[DEBUG] Using loader: $GENERATED_LOADER"
 
   [ -f "$GENERATED_LOADER" ] || { echo "[ERROR] Failed to generate loader."; pause; }
 

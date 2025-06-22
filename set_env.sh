@@ -14,7 +14,7 @@ install_packages() {
   REQUIRED_PACKAGES=(
     "build-essential" "gcc" "gcc-arm-none-eabi" "make" "swig" "gcc-arm-linux-gnueabihf"
     "libssl-dev" "curl" "bison" "flex" "git" "wget" "bc" "python3" "libncurses-dev"
-    "libgnutls28-dev" "uuid-dev" "python3-pip" "device-tree-compiler"
+    "libgnutls28-dev" "uuid-dev" "python3-pip" "device-tree-compiler" "genext2fs"
     "gcc-aarch64-linux-gnu" "g++-aarch64-linux-gnu" "debootstrap" "qemu-user"
     "qemu-user-static" "binfmt-support" "picocom" "python3-pyelftools"
   )

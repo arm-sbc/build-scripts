@@ -4,5 +4,5 @@ parameter       parameter.txt
 bootloader      rk356x_spl_loader_v1.23.114.bin
 loader1		idbloader.img
 loader2         u-boot.itb
-boot		boot_rk356x.img
+boot		boot_rk3568.img
 rootfs          rootfs.img
