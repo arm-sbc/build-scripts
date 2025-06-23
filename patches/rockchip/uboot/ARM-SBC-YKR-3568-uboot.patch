@@ -103,7 +103,7 @@
 
 --- dts/upstream/src/arm64/rockchip/rk3568-armsbc-ykr.dts	1970-01-01 04:00:00.000000000 +0400
 +++ dts/upstream/src/arm64/rockchip/rk3568-armsbc-ykr.dts	2025-06-20 23:16:37.207062671 +0400
-@@ -0,0 +1,956 @@
+@@ -0,0 +1,940 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +
 +/*
@@ -255,22 +255,6 @@
 +				remote-endpoint = <&hdmi_out_con>;
 +			};
 +		};
-+		
-+	panel-timing {
-+		clock-frequency = <148500000>; // ✔️ Standard 1080p60
-+		hactive         = <1920>;
-+		vactive         = <1080>;
-+		hsync-len       = <44>;
-+		hfront-porch    = <88>;
-+		hback-porch     = <148>;
-+		vsync-len       = <5>;
-+		vfront-porch    = <4>;
-+		vback-porch     = <36>;
-+		hsync-active    = <0>;
-+		vsync-active    = <0>;
-+		de-active       = <1>;
-+		pixelclk-active = <0>;
-+	};
 +};
 +	dc_12v: dc-12v-regulator {
 +		compatible = "regulator-fixed";
