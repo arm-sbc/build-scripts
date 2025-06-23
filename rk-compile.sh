@@ -153,11 +153,54 @@ compile_uboot() {
   cd - >/dev/null
 }
 
+set_bl31_from_rkbin() {
+  log "Setting BL31 path dynamically from rkbin for $CHIP..."
+
+  local TPL_DIR="rkbin/bin/rk35"
+  local PATTERN
+
+  case "$CHIP" in
+    rk3566|rk3568)
+      PATTERN="${TPL_DIR}/${CHIP}_bl31_v*.elf"
+      ;;
+    rk3576)
+      PATTERN="${TPL_DIR}/rk3576_bl31_v*.elf"
+      ;;
+    rk3588)
+      PATTERN="${TPL_DIR}/rk3588_bl31_v*.elf"
+      ;;
+    *)
+      error "No BL31 rule defined for CHIP=$CHIP"
+      ;;
+  esac
+
+  BL31=$(ls $PATTERN 2>/dev/null | sort -V | tail -n1)
+
+  if [ -z "$BL31" ] || [ ! -f "$BL31" ]; then
+    error "BL31 not found for $CHIP using pattern $PATTERN"
+  fi
+
+  export BL31=$(realpath "$BL31")
+  log "Using prebuilt BL31 from rkbin: $BL31"
+}
+
 # Function to compile Trusted Firmware (ATF)
 compile_atf() {
+  case "$CHIP" in
+    rk3566|rk3568|rk3576|rk3588)
+      log "Skipping ATF build. Using prebuilt BL31 from rkbin for $CHIP..."
+      set_bl31_from_rkbin
+      return
+      ;;
+  esac
+
   log "Compiling Trusted Firmware for $CHIP..."
 
-  cd arm-trusted-firmware || error "ATF source directory not found."
+  if [ ! -d "trusted-firmware-a" ]; then
+    git clone https://git.trustedfirmware.org/TF-A/trusted-firmware-a.git || error "Failed to clone ATF repository."
+  fi
+
+  cd trusted-firmware-a || error "ATF source directory not found."
   make CROSS_COMPILE=aarch64-linux-gnu- PLAT=$CHIP DEBUG=1 bl31 || error "Failed to compile Trusted Firmware."
   export BL31=$(pwd)/build/$CHIP/debug/bl31/bl31.elf
   [ -f "$BL31" ] || error "BL31 not found after compilation."

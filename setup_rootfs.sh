@@ -109,6 +109,15 @@ prepare_rootfs() {
   fi
 
   info "Root filesystem extracted to $ROOTFS_DIR."
+  
+  info "Fixing ownership and sudo file permissions..."
+  # Fix any files incorrectly owned by UID 1000
+  find "$ROOTFS_DIR" -uid 1000 -exec chown root:root {} +
+
+  # Ensure sudo-related files have correct permissions (silently skip missing ones)
+  [ -f "$ROOTFS_DIR/etc/sudoers" ] && chmod 440 "$ROOTFS_DIR/etc/sudoers"
+  [ -d "$ROOTFS_DIR/etc/sudoers.d" ] && chmod 755 "$ROOTFS_DIR/etc/sudoers.d"
+  [ -d "$ROOTFS_DIR/etc/sudoers.d" ] && find "$ROOTFS_DIR/etc/sudoers.d" -type f -exec chmod 440 {} +
 
   # Chroot into the rootfs directory and update passwords
   info "Changing root to $ROOTFS_DIR to update passwords..."

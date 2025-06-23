@@ -189,12 +189,19 @@ download_sources() {
           log "RKBin repository already exists. Skipping download."
         fi
 
-        log "Downloading Trusted Firmware (ATF) for Rockchip..."
-        if [ ! -d "arm-trusted-firmware" ]; then
-          git clone https://github.com/ARM-software/arm-trusted-firmware.git || { log "[ERROR] Failed to clone ATF repository."; exit 1; }
-        else
-          log "ATF source already exists. Skipping download."
-        fi
+	case "$CHIP" in
+	  rk3566|rk3568|rk3576|rk3588)
+		log "Skipping ATF download for $CHIP — using prebuilt BL31 from rkbin."
+		;;
+	  *)
+		log "Downloading Trusted Firmware (ATF) for Rockchip..."
+		if [ ! -d "trusted-firmware-a" ]; then
+		  git clone https://git.trustedfirmware.org/TF-A/trusted-firmware-a.git || { log "[ERROR] Failed to clone ATF repository."; exit 1; }
+		else
+		  log "ATF source already exists. Skipping download."
+		fi
+		;;
+	esac
 
         log "Downloading OP-TEE for Rockchip..."
         if [ ! -d "optee_os" ]; then
@@ -208,7 +215,7 @@ download_sources() {
       if [[ "$CHIP" == "a"* ]]; then
         log "Downloading Trusted Firmware (ATF) for Allwinner..."
         if [ ! -d "arm-trusted-firmware" ]; then
-          git clone https://github.com/ARM-software/arm-trusted-firmware.git || { log "[ERROR] Failed to clone ATF repository."; exit 1; }
+          git clone https://git.trustedfirmware.org/TF-A/trusted-firmware-a.git || { log "[ERROR] Failed to clone ATF repository."; exit 1; }
         else
           log "ATF source already exists. Skipping download."
         fi
