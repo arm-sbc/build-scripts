@@ -103,22 +103,19 @@ prepare_rootfs() {
   info "Extracting image: $IMAGES_DIR/rootfs.tar.xz..."
   rm -rf "$ROOTFS_DIR"
   mkdir -p "$ROOTFS_DIR"
-  if ! tar -xf "$IMAGES_DIR/rootfs.tar.xz" -C "$ROOTFS_DIR"; then
+  if ! tar --numeric-owner -xf "$IMAGES_DIR/rootfs.tar.xz" -C "$ROOTFS_DIR"; then
     error "Failed to extract the rootfs image."
     exit 1
   fi
 
   info "Root filesystem extracted to $ROOTFS_DIR."
-  
-  info "Fixing ownership and sudo file permissions..."
-  # Fix any files incorrectly owned by UID 1000
-  find "$ROOTFS_DIR" -uid 1000 -exec chown root:root {} +
 
-  # Ensure sudo-related files have correct permissions (silently skip missing ones)
+  # Ensure sudo file permissions are correct (required for secure privilege escalation)
+  info "Ensuring sudo permissions are correct..."
   [ -f "$ROOTFS_DIR/etc/sudoers" ] && chmod 440 "$ROOTFS_DIR/etc/sudoers"
   [ -d "$ROOTFS_DIR/etc/sudoers.d" ] && chmod 755 "$ROOTFS_DIR/etc/sudoers.d"
   [ -d "$ROOTFS_DIR/etc/sudoers.d" ] && find "$ROOTFS_DIR/etc/sudoers.d" -type f -exec chmod 440 {} +
-
+  
   # Chroot into the rootfs directory and update passwords
   info "Changing root to $ROOTFS_DIR to update passwords..."
   sudo chroot "$ROOTFS_DIR" /bin/bash -c "
@@ -329,16 +326,40 @@ info "Packing rootfs.img from prepared root filesystem..."
 ROOTFS_SRC="$OUTPUT_DIR/rootfs"
 ROOTFS_IMG="$OUTPUT_DIR/rootfs.img"
 TMP_MNT="mnt_rootfs"
-SIZE_MB=2048
+
+# Estimate size dynamically (add 512MB buffer)
+ROOTFS_SIZE_MB=$(du -sm "$ROOTFS_SRC" | cut -f1)
+SIZE_MB=$((ROOTFS_SIZE_MB + 512))
 
 info "Allocating $SIZE_MB MB for rootfs.img..."
 rm -f "$ROOTFS_IMG"
-dd if=/dev/zero of="$ROOTFS_IMG" bs=1M count=$SIZE_MB
+dd if=/dev/zero of="$ROOTFS_IMG" bs=1M count="$SIZE_MB" status=progress
 mkfs.ext4 -F "$ROOTFS_IMG"
 
+info "Unmounting and cleaning mnt_rootfs..."
+
+# Unmount all possible mount points first
+for dir in proc sys dev run; do
+  if mountpoint -q "$TMP_MNT/$dir"; then
+    sudo umount -lf "$TMP_MNT/$dir"
+  fi
+done
+
+# Unmount the main mount if still active
+if mountpoint -q "$TMP_MNT"; then
+  sudo umount -lf "$TMP_MNT"
+fi
+
+# Final cleanup with sudo
+sudo rm -rf "$TMP_MNT"
 mkdir -p "$TMP_MNT"
+
+# Mount and copy rootfs content
 sudo mount "$ROOTFS_IMG" "$TMP_MNT"
 sudo cp -a "$ROOTFS_SRC"/* "$TMP_MNT/"
+
+# ✅ Ensure everything in the image is owned by root
+sudo chown -R root:root "$TMP_MNT"
 
 if [ -d "$OUTPUT_DIR/lib/modules" ]; then
     info "Copying kernel modules..."
@@ -346,17 +367,14 @@ if [ -d "$OUTPUT_DIR/lib/modules" ]; then
     sudo cp -a "$OUTPUT_DIR/lib/modules/"* "$TMP_MNT/lib/modules/"
 fi
 
-echo "[INFO] Cloning Armbian firmware repository..."
-git clone --depth=1 https://github.com/armbian/firmware.git /tmp/armbian-firmware || {
-    warning "Failed to clone Armbian firmware repository. Skipping firmware copy."
-    FIRMWARE_CLONED=0
-}
-
-if [ -d "/tmp/armbian-firmware" ]; then
-    echo "[INFO] Copying firmware into rootfs..."
-    sudo mkdir -p "$ROOTFS_TMP_MNT/lib/firmware"
+info "Cloning Armbian firmware repository..."
+if git clone --depth=1 https://github.com/armbian/firmware.git /tmp/armbian-firmware; then
+    info "Copying firmware into rootfs..."
+    sudo mkdir -p "$TMP_MNT/lib/firmware"
     sudo rsync -a --delete /tmp/armbian-firmware/ "$TMP_MNT/lib/firmware/"
     rm -rf /tmp/armbian-firmware
+else
+    warning "Failed to clone Armbian firmware repository. Skipping firmware copy."
 fi
 
 sudo umount "$TMP_MNT"
