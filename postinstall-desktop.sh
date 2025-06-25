@@ -60,16 +60,14 @@ echo "[INFO] Updating package lists..."
 apt update
 
 echo "[INFO] Installing essentials..."
-apt install -y openssh-server gpiod alsa-utils fdisk nano i2c-tools \
-    net-tools iputils-ping usbutils bash-completion sshfs \
-    network-manager systemd-sysv libpam-systemd
-
+apt install -y openssh-server gpiod alsa-utils fdisk nano i2c-tools 
 echo "[INFO] Installing LXQt desktop and LightDM..."
+
 DEBIAN_FRONTEND=noninteractive apt install -y \
-    lxqt lightdm lightdm-gtk-greeter xserver-xorg xinit policykit-1
+    lxqt lightdm xinit 
 
 echo "[INFO] Installing Bluetooth stack..."
-apt install -y bluetooth bluez blueman pulseaudio pulseaudio-module-bluetooth
+apt install -y blueman
 
 echo "[INFO] Creating needed files and directories..."
 mkdir -p /run/systemd
@@ -85,20 +83,6 @@ if ! id ubuntu >/dev/null 2>&1; then
     echo "[INFO] User 'ubuntu' created (password will be set separately)."
 fi
 usermod -aG sudo ubuntu
-
-echo "[INFO] Enabling essential services..."
-systemctl enable ssh
-systemctl enable bluetooth
-systemctl enable NetworkManager
-systemctl enable lightdm
-
-echo "[INFO] Disabling unnecessary services..."
-systemctl disable systemd-timesyncd
-systemctl disable nftables
-systemctl mask nftables
-systemctl disable ModemManager
-systemctl disable apport
-systemctl disable snapd
 
 echo "[INFO] Enabling autologin for user 'ubuntu'..."
 mkdir -p /etc/lightdm/lightdm.conf.d
