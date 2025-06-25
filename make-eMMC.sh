@@ -181,6 +181,55 @@ BLOCKS=$(( TOTAL_KB * 1024 / BLOCK_SIZE ))
 
 genext2fs -b "$BLOCKS" -B "$BLOCK_SIZE" -d "$BOOT_DIR" -i "$INODES" -U "$BOOT_IMG" || pause
 
+#--- Create ext4-based rootfs.img from rootfs directory ---#
+echo "[INFO] Creating ext4 rootfs.img from $OUT_DIR/rootfs..."
+
+ROOTFS_DIR="$OUT_DIR/rootfs"
+ROOTFS_IMG="$OUT_DIR/rootfs.img"
+MNT_ROOTFS="$OUT_DIR/mnt_rootfs"
+
+# Auto-size the image based on real usage
+USED_KB=$(du -s --block-size=1024 "$ROOTFS_DIR" | cut -f1)
+PADDING_KB=$(( USED_KB / 4 ))  # 25% margin
+TOTAL_KB=$(( USED_KB + PADDING_KB ))
+
+# Enforce a minimum of 2 GB
+MIN_KB=$(( 2 * 1024 * 1024 ))
+[ "$TOTAL_KB" -lt "$MIN_KB" ] && TOTAL_KB="$MIN_KB"
+
+echo "[INFO] Allocating $(( TOTAL_KB / 1024 )) MB for rootfs.img..."
+dd if=/dev/zero of="$ROOTFS_IMG" bs=1K count=$TOTAL_KB
+mkfs.ext4 -F "$ROOTFS_IMG"
+
+mkdir -p "$MNT_ROOTFS"
+sudo mount "$ROOTFS_IMG" "$MNT_ROOTFS"
+echo "[INFO] Copying files to rootfs.img..."
+sudo rsync -aAX --exclude={"/dev/*","/proc/*","/sys/*","/tmp/*","/run/*"} "$ROOTFS_DIR/" "$MNT_ROOTFS/"
+
+# Copy kernel modules if available
+if [ -d "$OUT_DIR/lib/modules" ]; then
+  echo "[INFO] Copying kernel modules..."
+  sudo mkdir -p "$MNT_ROOTFS/lib/modules"
+  sudo cp -a "$OUT_DIR/lib/modules/"* "$MNT_ROOTFS/lib/modules/"
+fi
+
+# Clone and copy Armbian firmware
+echo "[INFO] Cloning Armbian firmware repository..."
+if git clone --depth=1 https://github.com/armbian/firmware.git /tmp/armbian-firmware; then
+  echo "[INFO] Copying firmware into rootfs..."
+  sudo mkdir -p "$MNT_ROOTFS/lib/firmware"
+  sudo rsync -a --delete /tmp/armbian-firmware/ "$MNT_ROOTFS/lib/firmware/"
+  rm -rf /tmp/armbian-firmware
+else
+  echo "[WARN] Failed to clone Armbian firmware repository. Skipping firmware copy."
+fi
+
+sync
+sudo umount "$MNT_ROOTFS"
+rmdir "$MNT_ROOTFS"
+
+echo "[SUCCESS] rootfs.img created at: $ROOTFS_IMG"
+
 #--- Generate raw image with afptool ---#
 echo "[INFO] Copying parameter.txt into OUT_DIR..."
 cp "$PARAMETER_FILE" "$OUT_DIR/parameter.txt" || { echo "[ERROR] Failed to copy parameter.txt to $OUT_DIR"; pause; }

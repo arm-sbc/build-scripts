@@ -109,6 +109,34 @@ prepare_rootfs() {
   fi
 
   info "Root filesystem extracted to $ROOTFS_DIR."
+  
+  # Prompt for optional desktop and utilities installation
+read -p "Do you want to install desktop environment and common utilities (e.g., LxQT, lightdm, SSH, ALSA, Bluetooth)? [y/N]: " INSTALL_DESKTOP
+
+if [[ "$INSTALL_DESKTOP" =~ ^[Yy]$ ]]; then
+  info "Installing desktop and utilities..."
+
+  # Use ARCH and QEMU_BIN that were set earlier (assumed available)
+  if [ "$ARCH" = "arm64" ]; then
+      QEMU_BIN="/usr/bin/qemu-aarch64-static"
+  elif [ "$ARCH" = "arm" ]; then
+      QEMU_BIN="/usr/bin/qemu-arm-static"
+  else
+      error "Unknown architecture: $ARCH"
+      exit 1
+  fi
+
+  if [ ! -f "$QEMU_BIN" ]; then
+      error "Missing QEMU binary: $QEMU_BIN"
+      echo "Please install it with: sudo apt install qemu-user-static"
+      exit 1
+  fi
+
+  # Call external desktop installer
+  ./postinstall-desktop.sh "$ROOTFS_DIR" "$ARCH" "$QEMU_BIN"
+else
+  info "Skipping desktop and utilities installation."
+fi
 
   # Ensure sudo file permissions are correct (required for secure privilege escalation)
   info "Ensuring sudo permissions are correct..."
@@ -319,68 +347,6 @@ case $OPTION in
         exit 1
         ;;
 esac
-
-#--- Create rootfs.img for firmware packaging ---#
-info "Packing rootfs.img from prepared root filesystem..."
-
-ROOTFS_SRC="$OUTPUT_DIR/rootfs"
-ROOTFS_IMG="$OUTPUT_DIR/rootfs.img"
-TMP_MNT="mnt_rootfs"
-
-# Estimate size dynamically (add 512MB buffer)
-ROOTFS_SIZE_MB=$(du -sm "$ROOTFS_SRC" | cut -f1)
-SIZE_MB=$((ROOTFS_SIZE_MB + 512))
-
-info "Allocating $SIZE_MB MB for rootfs.img..."
-rm -f "$ROOTFS_IMG"
-dd if=/dev/zero of="$ROOTFS_IMG" bs=1M count="$SIZE_MB" status=progress
-mkfs.ext4 -F "$ROOTFS_IMG"
-
-info "Unmounting and cleaning mnt_rootfs..."
-
-# Unmount all possible mount points first
-for dir in proc sys dev run; do
-  if mountpoint -q "$TMP_MNT/$dir"; then
-    sudo umount -lf "$TMP_MNT/$dir"
-  fi
-done
-
-# Unmount the main mount if still active
-if mountpoint -q "$TMP_MNT"; then
-  sudo umount -lf "$TMP_MNT"
-fi
-
-# Final cleanup with sudo
-sudo rm -rf "$TMP_MNT"
-mkdir -p "$TMP_MNT"
-
-# Mount and copy rootfs content
-sudo mount "$ROOTFS_IMG" "$TMP_MNT"
-sudo cp -a "$ROOTFS_SRC"/* "$TMP_MNT/"
-
-# ✅ Ensure everything in the image is owned by root
-sudo chown -R root:root "$TMP_MNT"
-
-if [ -d "$OUTPUT_DIR/lib/modules" ]; then
-    info "Copying kernel modules..."
-    sudo mkdir -p "$TMP_MNT/lib/modules"
-    sudo cp -a "$OUTPUT_DIR/lib/modules/"* "$TMP_MNT/lib/modules/"
-fi
-
-info "Cloning Armbian firmware repository..."
-if git clone --depth=1 https://github.com/armbian/firmware.git /tmp/armbian-firmware; then
-    info "Copying firmware into rootfs..."
-    sudo mkdir -p "$TMP_MNT/lib/firmware"
-    sudo rsync -a --delete /tmp/armbian-firmware/ "$TMP_MNT/lib/firmware/"
-    rm -rf /tmp/armbian-firmware
-else
-    warning "Failed to clone Armbian firmware repository. Skipping firmware copy."
-fi
-
-sudo umount "$TMP_MNT"
-rm -rf "$TMP_MNT"
-
-info "rootfs.img created at $ROOTFS_IMG"
 
 #--- Prompt to create Rockchip images ---#
 echo

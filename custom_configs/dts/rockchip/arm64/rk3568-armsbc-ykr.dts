@@ -215,14 +215,15 @@
 		regulator-max-microvolt = <5000000>;
 		vin-supply = <&dc_12v>;
 	};
-
-	vcc5v0_usb20_host: regulator-vcc5v0-usb20-host {
+	
+	vcc5v0_usb: vcc5v0-usb {
 		compatible = "regulator-fixed";
-		regulator-name = "vcc5v0_usb20_host";
-		enable-active-high;
-		gpio = <&gpio0 RK_PA6 GPIO_ACTIVE_HIGH>;
-		pinctrl-0 = <&vcc5v0_usb20_host_en>;
-		pinctrl-names = "default";
+		regulator-name = "vcc5v0_usb";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		vin-supply = <&dc_12v>;
 	};
 
 	vcc5v0_otg_vbus: regulator-vcc5v0-otg-vbus {
@@ -234,6 +235,7 @@
 		gpio = <&gpio0 RK_PA5 GPIO_ACTIVE_HIGH>;
 		pinctrl-0 = <&vcc5v0_otg_vbus_en>;
 		pinctrl-names = "default";
+		vin-supply = <&vcc5v0_usb>;
 	};
 };
 
@@ -311,9 +313,18 @@
 };
 
 &hdmi {
+ 	pinctrl-0 = <&hdmi_scl &hdmi_sda &hdmi_cec>;
     avdd-0v9-supply = <&vdda0v9_image>;
     avdd-1v8-supply = <&vcca1v8_image>;
     status = "okay";
+    
+    rockchip,phy-table =
+		<92812500  0x8009 0x0000 0x0270>,
+		<165000000 0x800b 0x0000 0x026d>,
+		<185625000 0x800b 0x0000 0x01ed>,
+		<297000000 0x800b 0x0000 0x01ad>,
+		<594000000 0x8029 0x0000 0x0088>,
+		<000000000 0x0000 0x0000 0x0000>;
 };
 
 &hdmi_in {
@@ -832,7 +843,6 @@
 };
 
 &usb2phy1_otg {
-	phy-supply = <&vcc5v0_usb20_host>;
 	status = "okay";
 };
 
@@ -871,10 +881,6 @@
 	};
 
 	usb {
-		vcc5v0_usb20_host_en: vcc5v0-usb20-host-en {
-			rockchip,pins = <0 RK_PA6 RK_FUNC_GPIO &pcfg_pull_none>;
-		};
-
 		vcc5v0_otg_vbus_en: vcc5v0-otg-vbus-en {
 			rockchip,pins = <0 RK_PA5 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
@@ -917,6 +923,20 @@
 	pmic {
 		pmic_int: pmic-int {
 			rockchip,pins = <0 RK_PA3 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+	
+    hdmi {
+		hdmi_scl: hdmi-scl {
+		    rockchip,pins = <4 RK_PC7 2 &pcfg_pull_none_smt>;
+		};
+
+		hdmi_sda: hdmi-sda {
+		    rockchip,pins = <4 RK_PD0 2 &pcfg_pull_none_smt>;
+		};
+
+		hdmi_cec: hdmi-cec {
+		    rockchip,pins = <4 RK_PD1 1 &pcfg_pull_none>;
 		};
 	};
 };

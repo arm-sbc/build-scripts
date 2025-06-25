@@ -2,6 +2,12 @@
 
 SCRIPT_NAME="make-sdcard.sh"
 
+# Near the top of make-sdcard.sh (before anything else)
+if [ "$EUID" -ne 0 ]; then
+  echo "[INFO][make-sdcard.sh] Re-running script with sudo..."
+  exec sudo "$0" "$@"
+fi
+
 # Function to log messages with colors
 log() {
   local MSG_TYPE=$1
@@ -14,12 +20,6 @@ log() {
     *) echo "[$(date +"%Y-%m-%d %H:%M:%S")][$MSG_TYPE][$SCRIPT_NAME] $MESSAGE" ;;
   esac
 }
-
-# Verify sudo access
-if [ "$EUID" -ne 0 ]; then
-  log "ERROR" "This script requires sudo privileges. Please run with sudo."
-  exit 1
-fi
 
 # Detect available board directories
 BOARD_DIRS=(OUT-ARM-SBC-*)
@@ -76,24 +76,15 @@ else
 fi
 log "INFO" "Platform detected: $PLATFORM"
 
-# Set correct serial console for extlinux
-if [ "$PLATFORM" == "Allwinner" ]; then
-  SERIAL_CONSOLE="ttyS0"
-elif [ "$PLATFORM" == "Rockchip" ]; then
-  SERIAL_CONSOLE="ttyS2"
-else
-  SERIAL_CONSOLE="ttyS1"  # Default fallback
-fi
-log "INFO" "Using serial console: $SERIAL_CONSOLE"
-
 # Cleanup existing images
 log "INFO" "Cleaning up existing images in $OUT_DIR..."
 rm -f "$OUT_DIR"/*.img || log "WARN" "No existing images to remove."
 
 # Create SD card image
-IMAGE_NAME="$OUT_DIR/${CHIP}_SD.img"
+IMAGE_BASENAME=$(basename "$dtb_file" .dtb)
+IMAGE_NAME="$OUT_DIR/${IMAGE_BASENAME}.img"
 log "INFO" "Creating SD card image: $IMAGE_NAME..."
-dd if=/dev/zero of="$IMAGE_NAME" bs=1M count=2048 || { log "ERROR" "Failed to create image file."; exit 1; }
+dd if=/dev/zero of="$IMAGE_NAME" bs=1M count=6144 || { log "ERROR" "Failed to create image file."; exit 1; }
 
 # Write bootloader
 log "INFO" "Writing bootloader..."
@@ -135,8 +126,26 @@ echo "$PARTITION_START,,L" | sfdisk "$IMAGE_NAME" || { log "ERROR" "Failed to pa
 LOOP_DEVICE=$(losetup -f --show "$IMAGE_NAME" --partscan) || { log "ERROR" "Failed to set up loop device."; exit 1; }
 log "INFO" "Loop device created: $LOOP_DEVICE"
 
-# Ensure partition exists
-if [ ! -e "${LOOP_DEVICE}p1" ]; then
+# Wait a moment for partition to appear
+PART_DEV=""
+for i in {1..10}; do
+  if [ -e "${LOOP_DEVICE}p1" ]; then
+    PART_DEV="${LOOP_DEVICE}p1"
+    break
+  elif [ -e "${LOOP_DEVICE}p01" ]; then
+    PART_DEV="${LOOP_DEVICE}p01"
+    break
+  elif [ -e "${LOOP_DEVICE}p0p1" ]; then
+    PART_DEV="${LOOP_DEVICE}p0p1"
+    break
+  elif [ -e "${LOOP_DEVICE}1" ]; then
+    PART_DEV="${LOOP_DEVICE}1"
+    break
+  fi
+  sleep 0.5
+done
+
+if [ -z "$PART_DEV" ] || [ ! -e "$PART_DEV" ]; then
   log "ERROR" "Partition not recognized after creation. Exiting."
   losetup -d "$LOOP_DEVICE"
   exit 1
@@ -144,12 +153,12 @@ fi
 
 # Format partition
 log "INFO" "Formatting partition with ext4..."
-mkfs.ext4 "${LOOP_DEVICE}p1" || { log "ERROR" "Failed to format partition."; losetup -d "$LOOP_DEVICE"; exit 1; }
+mkfs.ext4 "$PART_DEV" || { log "ERROR" "Failed to format partition."; losetup -d "$LOOP_DEVICE"; exit 1; }
 
 # Mount partition
 MOUNT_POINT="/mnt/${CHIP}_img"
 mkdir -p "$MOUNT_POINT"
-mount "${LOOP_DEVICE}p1" "$MOUNT_POINT" || { log "ERROR" "Failed to mount partition."; losetup -d "$LOOP_DEVICE"; exit 1; }
+mount "$PART_DEV" "$MOUNT_POINT" || { log "ERROR" "Failed to mount partition."; losetup -d "$LOOP_DEVICE"; exit 1; }
 
 # Detect kernel version dynamically
 KERNEL_VERSION=$(basename "$OUT_DIR/config-"* 2>/dev/null | cut -d'-' -f2-)
@@ -159,46 +168,87 @@ else
   log "WARN" "Kernel version not found, skipping config and System.map copy."
 fi
 
-# Copy essential files
-log "INFO" "Copying essential files..."
-mkdir -p "$MOUNT_POINT/boot"
+# Copy root filesystem
+log "INFO" "Copying root filesystem..."
 cp -a "$OUT_DIR/rootfs/"* "$MOUNT_POINT/"
 
-# Ensure kernel and dtb files exist before copying
-[ -f "$OUT_DIR/zImage" ] && cp "$OUT_DIR/zImage" "$MOUNT_POINT/boot/"
-[ -n "$(ls $OUT_DIR/*.dtb 2>/dev/null)" ] && cp "$OUT_DIR"/*.dtb "$MOUNT_POINT/boot/"
+# Setup boot directory
+BOOT_DIR="$MOUNT_POINT/boot"
+mkdir -p "$BOOT_DIR"
 
-# Copy config and System.map files if kernel version is detected
-[ -f "$OUT_DIR/config-$KERNEL_VERSION" ] && cp "$OUT_DIR/config-$KERNEL_VERSION" "$MOUNT_POINT/boot/" || log "WARN" "No config file found, skipping."
-[ -f "$OUT_DIR/System.map-$KERNEL_VERSION" ] && cp "$OUT_DIR/System.map-$KERNEL_VERSION" "$MOUNT_POINT/boot/" || log "WARN" "No System.map file found, skipping."
-
-# Configure extlinux
-log "INFO" "Configuring extlinux..."
-mkdir -p "$MOUNT_POINT/boot/extlinux"
-cat <<EOF > "$MOUNT_POINT/boot/extlinux/extlinux.conf"
-LABEL Linux
-    KERNEL /boot/zImage
-    FDT /boot/$(basename "$dtb_file")
-    APPEND console=${SERIAL_CONSOLE},115200 root=/dev/mmcblk0p1 rootwait rw
-EOF
-
-# Check if firmware is already downloaded
-if [ ! -d "$OUT_DIR" ]; then
-  log "INFO" "Firmware not found, downloading..."
-  log "INFO" "Downloading firmware from Armbian..."
-  FIRMWARE_URL="https://github.com/armbian/firmware/archive/refs/heads/master.zip"
-  wget -q -O "$OUT_DIR/firmware.zip" "$FIRMWARE_URL" || { log "ERROR" "Failed to download firmware."; exit 1; }
-  unzip -qo "$OUT_DIR/firmware.zip" -d "$OUT_DIR/firmware/"
-  rsync -a --ignore-existing "$OUT_DIR/firmware/" "$MOUNT_POINT/lib/firmware/"
-  else
-  log "INFO" "Firmware already exists, skipping download."
-  
+# Determine kernel image file
+if [ -f "$OUT_DIR/Image" ]; then
+  cp "$OUT_DIR/Image" "$BOOT_DIR/"
+  KERNEL_FILE="Image"
+elif [ -f "$OUT_DIR/zImage" ]; then
+  cp "$OUT_DIR/zImage" "$BOOT_DIR/"
+  KERNEL_FILE="zImage"
+else
+  log "ERROR" "No kernel image found (Image or zImage)."
+  umount "$MOUNT_POINT"; losetup -d "$LOOP_DEVICE"; exit 1
 fi
 
-# Copy modules and firmware
-log "INFO" "Copying kernel modules and firmware..."
-[ -d "$OUT_DIR/lib/modules" ] && cp -a "$OUT_DIR/lib/modules" "$MOUNT_POINT/lib/"
+# Copy DTB(s)
+[ -n "$(ls "$OUT_DIR"/*.dtb 2>/dev/null)" ] && cp "$OUT_DIR"/*.dtb "$BOOT_DIR/"
 
+# Copy config and System.map
+[ -f "$OUT_DIR/config-$KERNEL_VERSION" ] && cp "$OUT_DIR/config-$KERNEL_VERSION" "$BOOT_DIR/config"
+[ -f "$OUT_DIR/System.map-$KERNEL_VERSION" ] && cp "$OUT_DIR/System.map-$KERNEL_VERSION" "$BOOT_DIR/System.map"
+
+# Generate extlinux.conf dynamically
+log "INFO" "Creating extlinux.conf..."
+EXTLINUX_DIR="$BOOT_DIR/extlinux"
+mkdir -p "$EXTLINUX_DIR"
+
+case "$CHIP" in
+  rk3588|rk3568|rk3399)
+    CONSOLE="ttyS2"
+    BAUD="1500000"
+    ;;
+  rk3576)
+    CONSOLE="ttyS0"
+    BAUD="1500000"
+    ;;
+  rk3288|rk3128)
+    CONSOLE="ttyS2"
+    BAUD="115200"
+    ;;
+  *)
+    CONSOLE="ttyS2"
+    BAUD="1500000"
+    ;;
+esac
+
+# Generate extlinux.conf
+cat > "$EXTLINUX_DIR/extlinux.conf" <<EOF
+LABEL Linux ARB-SBC
+    KERNEL /boot/$KERNEL_FILE
+    FDT /boot/$(basename "$dtb_file")
+    APPEND console=$CONSOLE,$BAUD root=/dev/mmcblk1p1 rw rootwait init=/sbin/init
+EOF
+log "INFO" "extlinux.conf created at $EXTLINUX_DIR"
+
+# Copy kernel modules if available
+if [ -d "$OUT_DIR/lib/modules" ]; then
+  log "INFO" "Copying kernel modules..."
+  mkdir -p "$MOUNT_POINT/lib/modules"
+  cp -a "$OUT_DIR/lib/modules/"* "$MOUNT_POINT/lib/modules/"
+fi
+
+# Clone and copy Armbian firmware
+log "INFO" "Cloning Armbian firmware repository..."
+if git clone --depth=1 https://github.com/armbian/firmware.git /tmp/armbian-firmware; then
+  log "INFO" "Copying firmware into rootfs..."
+  mkdir -p "$MOUNT_POINT/lib/firmware"
+  rsync -a --delete /tmp/armbian-firmware/ "$MOUNT_POINT/lib/firmware/"
+  rm -rf /tmp/armbian-firmware
+else
+  log "WARN" "Failed to clone Armbian firmware repository. Skipping firmware copy."
+fi
+
+# Fix ownership to UID 1000 inside the SD image
+log "INFO" "Fixing ownership inside rootfs (UID 1000)..."
+chown -R 1000:1000 "$MOUNT_POINT"
 
 # Unmount and finalize
 umount "$MOUNT_POINT"
