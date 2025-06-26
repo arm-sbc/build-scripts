@@ -255,3 +255,13 @@ umount "$MOUNT_POINT"
 losetup -d "$LOOP_DEVICE"
 log "INFO" "SD card image creation completed successfully."
 
+if [ -n "$BUILD_START_TIME" ]; then
+  BUILD_END_TIME=$(date +%s)
+  BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+  minutes=$((BUILD_DURATION / 60))
+  seconds=$((BUILD_DURATION % 60))
+  echo "[INFO] Total build time: ${minutes}m ${seconds}s"
+else
+  echo "[WARN] BUILD_START_TIME not set. Cannot show elapsed time."
+fi
+

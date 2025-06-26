@@ -50,6 +50,9 @@ nameserver 8.8.8.8
 nameserver 8.8.4.4
 EOF
 
+sudo chown -R root:root "$ROOTFS_DIR/etc"
+sudo chown -R root:root "$ROOTFS_DIR/var"
+
 # --- Chroot and Configure ---
 info "Starting chroot setup..."
 cat << 'EOF' | sudo chroot "$ROOTFS_DIR"
@@ -60,7 +63,7 @@ echo "[INFO] Updating package lists..."
 apt update
 
 echo "[INFO] Installing essentials..."
-apt install -y openssh-server gpiod alsa-utils fdisk nano i2c-tools 
+apt install -y openssh-server gpiod alsa-utils fdisk nano i2c-tools util-linux-extra
 echo "[INFO] Installing LXQt desktop and LightDM..."
 
 DEBIAN_FRONTEND=noninteractive apt install -y \
@@ -68,21 +71,6 @@ DEBIAN_FRONTEND=noninteractive apt install -y \
 
 echo "[INFO] Installing Bluetooth stack..."
 apt install -y blueman
-
-echo "[INFO] Creating needed files and directories..."
-mkdir -p /run/systemd
-mkdir -p /var/lib/systemd
-touch /var/lib/systemd/random-seed
-
-touch /var/run/utmp
-chmod 664 /var/run/utmp
-
-echo "[INFO] Ensuring user 'ubuntu' exists and is in sudo group..."
-if ! id ubuntu >/dev/null 2>&1; then
-    useradd -m -s /bin/bash ubuntu
-    echo "[INFO] User 'ubuntu' created (password will be set separately)."
-fi
-usermod -aG sudo ubuntu
 
 echo "[INFO] Enabling autologin for user 'ubuntu'..."
 mkdir -p /etc/lightdm/lightdm.conf.d
@@ -119,11 +107,25 @@ else
     echo "127.0.1.1 \$HOSTNAME" >> /etc/hosts
 fi
 
+echo "[INFO] Removing unwanted services (nftables, accounts-daemon)..."
+apt purge -y nftables accountsservice
+apt autoremove -y --purge
+
 echo "[INFO] Cleaning apt cache..."
 apt clean
 rm -rf /var/lib/apt/lists/*
 
 EOF
+
+echo "[INFO] Fixing sudo binary permissions..."
+sudo chown root:root "$MNT_ROOTFS/usr/bin/sudo" 2>/dev/null || true
+sudo chmod 4755 "$MNT_ROOTFS/usr/bin/sudo" 2>/dev/null || true
+
+echo "[INFO] Fixing sudoers ownership and mode..."
+sudo chown root:root "$MNT_ROOTFS/etc/sudoers" 2>/dev/null || true
+sudo chmod 440 "$MNT_ROOTFS/etc/sudoers" 2>/dev/null || true
+sudo chown -R root:root "$MNT_ROOTFS/etc/sudoers.d" 2>/dev/null || true
+sudo find "$MNT_ROOTFS/etc/sudoers.d" -type f -exec chmod 440 {} + 2>/dev/null
 
 # --- Cleanup ---
 info "Unmounting /dev, /proc, /sys..."
