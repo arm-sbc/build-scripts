@@ -394,7 +394,7 @@
 +
 +&gmac0 {
 +
-+	phy-mode = "rgmii-d";
++	phy-mode = "rgmii-id";
 +	clock_in_out = "output";
 +	phy-supply = <&vcc3v3_sys>;
 +	assigned-clocks = <&cru SCLK_GMAC0_RX_TX>, <&cru SCLK_GMAC0>;
