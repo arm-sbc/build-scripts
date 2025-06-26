@@ -138,12 +138,6 @@ else
   info "Skipping desktop and utilities installation."
 fi
 
-  # Ensure sudo file permissions are correct (required for secure privilege escalation)
-  info "Ensuring sudo permissions are correct..."
-  [ -f "$ROOTFS_DIR/etc/sudoers" ] && chmod 440 "$ROOTFS_DIR/etc/sudoers"
-  [ -d "$ROOTFS_DIR/etc/sudoers.d" ] && chmod 755 "$ROOTFS_DIR/etc/sudoers.d"
-  [ -d "$ROOTFS_DIR/etc/sudoers.d" ] && find "$ROOTFS_DIR/etc/sudoers.d" -type f -exec chmod 440 {} +
-  
   # Chroot into the rootfs directory and update passwords
   info "Changing root to $ROOTFS_DIR to update passwords..."
   sudo chroot "$ROOTFS_DIR" /bin/bash -c "
@@ -376,6 +370,17 @@ case $IMAGE_OPTION in
         warning "Invalid choice. Skipping image creation."
         ;;
 esac
+
+# --- Build Duration Summary ---
+if [ -n "$BUILD_START_TIME" ]; then
+  BUILD_END_TIME=$(date +%s)
+  BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+  minutes=$((BUILD_DURATION / 60))
+  seconds=$((BUILD_DURATION % 60))
+  echo -e "\033[1;34m[INFO]\033[0m Total build time: ${minutes}m ${seconds}s"
+else
+  echo -e "\033[1;33m[WARN]\033[0m BUILD_START_TIME not set. Cannot display build duration."
+fi
 
 info "Rootfs creation and image options completed."
 

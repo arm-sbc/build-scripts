@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Script Name: postinstall-desktop.sh
 
 # --- Color Logging ---
@@ -25,6 +24,11 @@ if [ -z "$ROOTFS_DIR" ] || [ -z "$ARCH" ] || [ -z "$QEMU_BIN" ]; then
     exit 1
 fi
 
+if [ "$ROOTFS_DIR" = "/" ]; then
+    error "Refusing to operate on ROOTFS_DIR=/ — this could destroy your system."
+    exit 1
+fi
+
 if [ ! -f "$QEMU_BIN" ]; then
     error "QEMU binary not found at $QEMU_BIN"
     exit 1
@@ -38,6 +42,14 @@ info "Ensuring /tmp exists with correct permissions..."
 sudo mkdir -p "$ROOTFS_DIR/tmp"
 sudo chmod 1777 "$ROOTFS_DIR/tmp"
 
+info "Fixing permissions and ownership before chroot..."
+sudo chown root:root "$ROOTFS_DIR"
+sudo chown -R root:root "$ROOTFS_DIR/etc" "$ROOTFS_DIR/var" "$ROOTFS_DIR/usr" "$ROOTFS_DIR/bin" "$ROOTFS_DIR/sbin" "$ROOTFS_DIR/lib"
+sudo chmod 4755 "$ROOTFS_DIR/usr/bin/sudo" 2>/dev/null || true
+sudo chmod 440 "$ROOTFS_DIR/etc/sudoers" 2>/dev/null || true
+sudo find "$ROOTFS_DIR/etc/sudoers.d" -type f -exec chmod 440 {} + 2>/dev/null
+sudo chown -R 1000:1000 "$ROOTFS_DIR/home/ubuntu" 2>/dev/null || true
+
 info "Binding /dev, /proc, /sys..."
 sudo mount --bind /dev "$ROOTFS_DIR/dev"
 sudo mount --bind /proc "$ROOTFS_DIR/proc"
@@ -50,13 +62,9 @@ nameserver 8.8.8.8
 nameserver 8.8.4.4
 EOF
 
-sudo chown -R root:root "$ROOTFS_DIR/etc"
-sudo chown -R root:root "$ROOTFS_DIR/var"
-
 # --- Chroot and Configure ---
-info "Starting chroot setup..."
+info "Starting chroot configuration..."
 cat << 'EOF' | sudo chroot "$ROOTFS_DIR"
-
 set -e
 
 echo "[INFO] Updating package lists..."
@@ -64,13 +72,9 @@ apt update
 
 echo "[INFO] Installing essentials..."
 apt install -y openssh-server gpiod alsa-utils fdisk nano i2c-tools util-linux-extra
+
 echo "[INFO] Installing LXQt desktop and LightDM..."
-
-DEBIAN_FRONTEND=noninteractive apt install -y \
-    lxqt lightdm xinit 
-
-echo "[INFO] Installing Bluetooth stack..."
-apt install -y blueman
+DEBIAN_FRONTEND=noninteractive apt install -y lxqt lightdm xinit blueman
 
 echo "[INFO] Enabling autologin for user 'ubuntu'..."
 mkdir -p /etc/lightdm/lightdm.conf.d
@@ -81,10 +85,8 @@ autologin-user-timeout=0
 user-session=lxqt
 AUTOLOGIN
 
-echo "[INFO] Removing any LXC-style netplan config..."
+echo "[INFO] Configuring NetworkManager with Netplan..."
 rm -f /etc/netplan/10-lxc.yaml /etc/netplan/lxc.yaml
-
-echo "[INFO] Writing NetworkManager netplan config..."
 mkdir -p /etc/netplan
 cat <<NETPLAN > /etc/netplan/01-network-manager.yaml
 network:
@@ -97,35 +99,25 @@ network:
       dhcp4: true
 NETPLAN
 
-echo "[INFO] Setting hostname based on chip ID..."
-CHIPID=\$(grep -m1 Serial /proc/cpuinfo | awk '{print \$3}' | tail -c 9)
-HOSTNAME="armsbc-\${CHIPID:-default}"
-echo "\$HOSTNAME" > /etc/hostname
-if grep -q "127.0.1.1" /etc/hosts; then
-    sed -i "s/127.0.1.1.*/127.0.1.1\t\$HOSTNAME/" /etc/hosts
-else
-    echo "127.0.1.1 \$HOSTNAME" >> /etc/hosts
-fi
-
-echo "[INFO] Removing unwanted services (nftables, accounts-daemon)..."
+echo "[INFO] Removing unwanted services..."
 apt purge -y nftables accountsservice
 apt autoremove -y --purge
 
-echo "[INFO] Cleaning apt cache..."
+echo "[INFO] Cleaning up..."
 apt clean
 rm -rf /var/lib/apt/lists/*
-
 EOF
 
-echo "[INFO] Fixing sudo binary permissions..."
-sudo chown root:root "$MNT_ROOTFS/usr/bin/sudo" 2>/dev/null || true
-sudo chmod 4755 "$MNT_ROOTFS/usr/bin/sudo" 2>/dev/null || true
+# --- Hostname Setup ---
+HOSTNAME=$(echo "$BOARD" | tr '[:upper:]' '[:lower:]')
+info "Setting hostname to '$HOSTNAME'..."
 
-echo "[INFO] Fixing sudoers ownership and mode..."
-sudo chown root:root "$MNT_ROOTFS/etc/sudoers" 2>/dev/null || true
-sudo chmod 440 "$MNT_ROOTFS/etc/sudoers" 2>/dev/null || true
-sudo chown -R root:root "$MNT_ROOTFS/etc/sudoers.d" 2>/dev/null || true
-sudo find "$MNT_ROOTFS/etc/sudoers.d" -type f -exec chmod 440 {} + 2>/dev/null
+sudo tee "$ROOTFS_DIR/etc/hostname" <<< "$HOSTNAME"
+if grep -q '^127.0.1.1' "$ROOTFS_DIR/etc/hosts"; then
+    sudo sed -i "s/^127.0.1.1.*/127.0.1.1\t$HOSTNAME/" "$ROOTFS_DIR/etc/hosts"
+else
+    echo "127.0.1.1 $HOSTNAME" | sudo tee -a "$ROOTFS_DIR/etc/hosts"
+fi
 
 # --- Cleanup ---
 info "Unmounting /dev, /proc, /sys..."
@@ -133,5 +125,16 @@ sudo umount "$ROOTFS_DIR/dev"
 sudo umount "$ROOTFS_DIR/proc"
 sudo umount "$ROOTFS_DIR/sys"
 
-success "✅ Post-installation complete: Desktop, utilities, and services are set up."
+# --- Build Duration Summary ---
+if [ -n "$BUILD_START_TIME" ]; then
+  BUILD_END_TIME=$(date +%s)
+  BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+  minutes=$((BUILD_DURATION / 60))
+  seconds=$((BUILD_DURATION % 60))
+  echo -e "\033[1;34m[INFO]\033[0m Total build time: ${minutes}m ${seconds}s"
+else
+  echo -e "\033[1;33m[WARN]\033[0m BUILD_START_TIME not set. Cannot display build duration."
+fi
+
+success "✅ Post-installation complete: Desktop, hostname, and permissions are configured safely."
 
