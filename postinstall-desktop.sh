@@ -17,10 +17,11 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; }
 ROOTFS_DIR="$1"
 ARCH="$2"
 QEMU_BIN="$3"
+VERSION="$4"
 
 # --- Validation ---
-if [ -z "$ROOTFS_DIR" ] || [ -z "$ARCH" ] || [ -z "$QEMU_BIN" ]; then
-    error "Usage: $0 <rootfs_dir> <arch> <qemu_bin>"
+if [ -z "$ROOTFS_DIR" ] || [ -z "$ARCH" ] || [ -z "$QEMU_BIN" ] || [ -z "$VERSION" ]; then
+    error "Usage: $0 <rootfs_dir> <arch> <qemu_bin> <version>"
     exit 1
 fi
 
@@ -64,19 +65,60 @@ EOF
 
 # --- Chroot and Configure ---
 info "Starting chroot configuration..."
-cat << 'EOF' | sudo chroot "$ROOTFS_DIR"
+
+sudo chroot "$ROOTFS_DIR" /bin/bash -c '
 set -e
+
+# --- 1. Set Hostname ---
+HOSTNAME=$(echo "$CHIP" | tr '[:upper:]' '[:lower:]')
+echo "[INFO] Setting hostname..."
+echo "'"$HOSTNAME"'" > /etc/hostname
+if grep -q "^127.0.1.1" /etc/hosts; then
+    sed -i "s/^127.0.1.1.*/127.0.1.1    '"$HOSTNAME"'/" /etc/hosts
+else
+    echo "127.0.1.1    '"$HOSTNAME"'" >> /etc/hosts
+fi
+
+# --- 2. Configure Locales ---
+echo "[INFO] Configuring locales..."
+apt-get install -y locales
+sed -i "s/^# *en_US.UTF-8/en_US.UTF-8/" /etc/locale.gen
+locale-gen
+update-locale LANG=en_US.UTF-8
+
+# --- 3. Create 'ubuntu' user ---
+echo "[INFO] Creating user 'ubuntu'..."
+if ! id ubuntu &>/dev/null; then
+    useradd -m -s /bin/bash ubuntu
+    echo "ubuntu:ubuntu" | chpasswd
+else
+    echo "[INFO] User 'ubuntu' already exists."
+fi
+
+usermod -aG sudo ubuntu
+
+# --- 4. Passwordless sudo ---
+echo "ubuntu ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/99-ubuntu-user
+chmod 0440 /etc/sudoers.d/99-ubuntu-user
 
 echo "[INFO] Updating package lists..."
 apt update
 
-echo "[INFO] Installing essentials..."
-apt install -y openssh-server gpiod alsa-utils fdisk nano i2c-tools util-linux-extra
+# --- 5. Install Essential Packages ---
+echo "[INFO] Installing essential packages..."
+ESSENTIAL_PACKAGES="openssh-server gpiod alsa-utils fdisk nano i2c-tools util-linux-extra"
+if ! DEBIAN_FRONTEND=noninteractive apt-get install -y $ESSENTIAL_PACKAGES; then
+    echo "[WARN] Some packages failed to install."
+    read -p "Continue anyway? [Y/n]: " CONT
+    [[ "$CONT" =~ ^[Nn]$ ]] && exit 1
+fi
 
-echo "[INFO] Installing LXQt desktop and LightDM..."
-DEBIAN_FRONTEND=noninteractive apt install -y lxqt lightdm xinit blueman
+# --- 6. Install LXQt Desktop and LightDM ---
+echo "[INFO] Installing LXQt and LightDM..."
+DEBIAN_FRONTEND=noninteractive apt-get install -y lxqt lightdm xinit blueman nm-tray
 
-echo "[INFO] Enabling autologin for user 'ubuntu'..."
+# --- 7. LightDM autologin ---
+echo "[INFO] Enabling autologin..."
 mkdir -p /etc/lightdm/lightdm.conf.d
 cat <<AUTOLOGIN > /etc/lightdm/lightdm.conf.d/50-autologin.conf
 [Seat:*]
@@ -85,10 +127,11 @@ autologin-user-timeout=0
 user-session=lxqt
 AUTOLOGIN
 
-echo "[INFO] Configuring NetworkManager with Netplan..."
-rm -f /etc/netplan/10-lxc.yaml /etc/netplan/lxc.yaml
+# --- 8. Configure Netplan for NetworkManager (Ethernet + Wi-Fi) ---
+echo "[INFO] Setting up Netplan with NetworkManager..."
+rm -f /etc/netplan/*.yaml
 mkdir -p /etc/netplan
-cat <<NETPLAN > /etc/netplan/01-network-manager.yaml
+cat <<EOF > /etc/netplan/01-network-manager.yaml
 network:
   version: 2
   renderer: NetworkManager
@@ -97,28 +140,15 @@ network:
       match:
         name: "e*"
       dhcp4: true
-NETPLAN
+NETPLAN_EOF
 
-echo "[INFO] Removing unwanted services..."
-apt purge -y nftables accountsservice
-apt autoremove -y --purge
-
+# --- 9. Cleanup ---
 echo "[INFO] Cleaning up..."
+apt purge -y nftables accountsservice || true
+apt autoremove -y --purge || true
 apt clean
 rm -rf /var/lib/apt/lists/*
-EOF
-
-# --- Hostname Setup ---
-HOSTNAME=$(echo "$BOARD" | tr '[:upper:]' '[:lower:]')
-info "Setting hostname to '$HOSTNAME'..."
-
-sudo tee "$ROOTFS_DIR/etc/hostname" <<< "$HOSTNAME"
-if grep -q '^127.0.1.1' "$ROOTFS_DIR/etc/hosts"; then
-    sudo sed -i "s/^127.0.1.1.*/127.0.1.1\t$HOSTNAME/" "$ROOTFS_DIR/etc/hosts"
-else
-    echo "127.0.1.1 $HOSTNAME" | sudo tee -a "$ROOTFS_DIR/etc/hosts"
-fi
-
+'
 # --- Cleanup ---
 info "Unmounting /dev, /proc, /sys..."
 sudo umount "$ROOTFS_DIR/dev"

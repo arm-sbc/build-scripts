@@ -24,6 +24,11 @@ function prompt() {
     echo -e "${green}[PROMPT] $1${reset}"
 }
 
+# Alias 'warn' to 'warning' for convenience
+function warn() {
+    warning "$@"
+}
+
 # Check if required variables are set
 if [ -z "$BOARD" ] || [ -z "$ARCH" ] || [ -z "$VERSION" ]; then
     error "Required variables BOARD, ARCH, or VERSION are missing. Exiting."
@@ -133,7 +138,7 @@ if [[ "$INSTALL_DESKTOP" =~ ^[Yy]$ ]]; then
   fi
 
   # Call external desktop installer
-  ./postinstall-desktop.sh "$ROOTFS_DIR" "$ARCH" "$QEMU_BIN"
+  ./postinstall-desktop.sh "$FRESH_DIR" "$ARCH" "$QEMU_BIN" "$VERSION"
 else
   info "Skipping desktop and utilities installation."
 fi
@@ -225,8 +230,56 @@ create_fresh_rootfs() {
 
     info "Fresh rootfs created successfully in $FRESH_DIR."
     sudo umount "$TEMP_MOUNT_DIR"
-    rm -rf "$TEMP_MOUNT_DIR"
-}
+rm -rf "$TEMP_MOUNT_DIR"
+
+# --- Setup APT sources for fresh rootfs ---
+info "Setting up APT sources for $VERSION..."
+
+if [[ "$VERSION" =~ ^(noble|jammy|focal|oracular)$ ]]; then
+    cat <<EOF | sudo tee "$FRESH_DIR/etc/apt/sources.list" > /dev/null
+deb http://ports.ubuntu.com/ubuntu-ports $VERSION main restricted universe multiverse
+deb http://ports.ubuntu.com/ubuntu-ports $VERSION-updates main restricted universe multiverse
+deb http://ports.ubuntu.com/ubuntu-ports $VERSION-security main restricted universe multiverse
+EOF
+
+elif [[ "$VERSION" =~ ^(bookworm|bullseye|trixie)$ ]]; then
+    cat <<EOF | sudo tee "$FRESH_DIR/etc/apt/sources.list" > /dev/null
+deb http://deb.debian.org/debian $VERSION main contrib
+deb http://deb.debian.org/debian $VERSION-updates main contrib
+deb http://deb.debian.org/debian-security/ $VERSION-security main contrib
+EOF
+
+else
+    warn "VERSION '$VERSION' not matched. Skipping APT source setup."
+fi
+
+# Prompt for optional desktop and utilities installation
+read -p "Do you want to install desktop environment and common utilities (e.g., LxQT, lightdm, SSH, ALSA, Bluetooth)? [y/N]: " INSTALL_DESKTOP
+
+if [[ "$INSTALL_DESKTOP" =~ ^[Yy]$ ]]; then
+  info "Installing desktop and utilities..."
+
+  if [ "$ARCH" = "arm64" ]; then
+      QEMU_BIN="/usr/bin/qemu-aarch64-static"
+  elif [ "$ARCH" = "arm32" ]; then
+      QEMU_BIN="/usr/bin/qemu-arm-static"
+  else
+      error "Unknown architecture: $ARCH"
+      exit 1
+  fi
+
+  if [ ! -f "$QEMU_BIN" ]; then
+      error "Missing QEMU binary: $QEMU_BIN"
+      echo "Please install it with: sudo apt install qemu-user-static"
+      exit 1
+  fi
+
+  ./postinstall-desktop.sh "$FRESH_DIR" "$ARCH" "$QEMU_BIN" "$VERSION"
+else
+  info "Skipping desktop and utilities installation."
+fi
+
+};
 
 # Rootfs creation options
 info "Select an option for rootfs creation:"
@@ -383,4 +436,3 @@ else
 fi
 
 info "Rootfs creation and image options completed."
-

@@ -15,59 +15,59 @@
 	compatible = "arm-sbc,rk3568-kick", "rockchip,rk3568";
 
 	aliases {
-		ethernet0 = &gmac0;
-		ethernet1 = &gmac1;
-		mmc0 = &sdhci;
-		mmc1 = &sdmmc0;
+			ethernet0 = &gmac0;
+			ethernet1 = &gmac1;
+			mmc0 = &sdhci;
+			mmc1 = &sdmmc0;
 	};
 
 	chosen: chosen {
-		stdout-path = "serial2:1500000n8";
+			stdout-path = "serial2:1500000n8";
 	};
 	
 
     rk809-sound {
-		compatible = "simple-audio-card";
-		simple-audio-card,format = "i2s";
-		simple-audio-card,name = "ROCKCHIP-809-SOUND";
-		simple-audio-card,mclk-fs = <256>;
-		status = "okay";
-		
-		simple-audio-card,widgets =
-			"Headphone", "Headphones",
-			"Speaker", "Speaker";
-		simple-audio-card,routing =
-			"Headphones", "HPOL",
-			"Headphones", "HPOR",
-			"Speaker", "SPKO";
-         
-		simple-audio-card,cpu {
-			sound-dai = <&i2s1_8ch>;
-		};
+			compatible = "simple-audio-card";
+			simple-audio-card,format = "i2s";
+			simple-audio-card,name = "ROCKCHIP-809-SOUND";
+			simple-audio-card,mclk-fs = <256>;
+			status = "okay";
+			
+			simple-audio-card,widgets =
+				"Headphone", "Headphones",
+				"Speaker", "Speaker";
+			simple-audio-card,routing =
+				"Headphones", "HPOL",
+				"Headphones", "HPOR",
+				"Speaker", "SPKO";
+		     
+			simple-audio-card,cpu {
+				sound-dai = <&i2s1_8ch>;
+			};
 
-		simple-audio-card,codec {
-			sound-dai = <&rk809>;
+			simple-audio-card,codec {
+				sound-dai = <&rk809>;
+			};
 		};
-	};
 
 	leds {
-		compatible = "gpio-leds";
+			compatible = "gpio-leds";
 
-		led-user {
-			label = "work-led";
-			default-state = "on";
-			gpios = <&gpio0 RK_PD5 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "heartbeat";
-			pinctrl-names = "default";
-			pinctrl-0 = <&user_led_enable_h>;
-			retain-state-suspended;
+			led-user {
+				label = "work-led";
+				default-state = "on";
+				gpios = <&gpio0 RK_PD5 GPIO_ACTIVE_HIGH>;
+				linux,default-trigger = "heartbeat";
+				pinctrl-names = "default";
+				pinctrl-0 = <&user_led_enable_h>;
+				retain-state-suspended;
+				};
+				
+			fan {
+		    	gpios = <&gpio0 RK_PD6 GPIO_ACTIVE_HIGH>;
+		    	default-state = "on";
 			};
-			
-		fan {
-        	gpios = <&gpio0 RK_PD6 GPIO_ACTIVE_HIGH>;
-        	default-state = "on";
-    	};
-	};
+		};
 		
 		
 	
