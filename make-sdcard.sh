@@ -1,5 +1,5 @@
 #!/bin/bash
-
+BUILD_START_TIME=$(date +%s)
 SCRIPT_NAME="make-sdcard.sh"
 
 # Near the top of make-sdcard.sh (before anything else)
@@ -168,9 +168,24 @@ else
   log "WARN" "Kernel version not found, skipping config and System.map copy."
 fi
 
+# Detect rootfs directory
+if [ -d "$OUT_DIR/rootfs" ]; then
+  ROOTFS_DIR="$OUT_DIR/rootfs"
+  log "INFO" "Using prebuilt rootfs: $ROOTFS_DIR"
+else
+  FRESH_DIR=$(find "$OUT_DIR" -maxdepth 1 -type d -name "fresh_*" | head -n 1)
+  if [ -n "$FRESH_DIR" ]; then
+    ROOTFS_DIR="$FRESH_DIR"
+    log "INFO" "Using detected fresh rootfs: $ROOTFS_DIR"
+  else
+    log "ERROR" "No rootfs directory found."
+    umount "$MOUNT_POINT"; losetup -d "$LOOP_DEVICE"; exit 1
+  fi
+fi
+
 # Copy root filesystem
 log "INFO" "Copying root filesystem..."
-cp -a "$OUT_DIR/rootfs/"* "$MOUNT_POINT/"
+cp -a "$ROOTFS_DIR/." "$MOUNT_POINT/"
 
 # Setup boot directory
 BOOT_DIR="$MOUNT_POINT/boot"
