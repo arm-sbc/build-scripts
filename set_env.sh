@@ -73,6 +73,7 @@ select_board() {
       echo "11- ARM-SBC-DCA-3588"
       echo "12- ARM-SBC-EDGE-3588"
       echo "13- ARM-SBC-RWA-3588"
+      echo "14- ARM-SBC-KICK-3588"
       read -p "Enter the number corresponding to your Rockchip board: " BOARD_SELECTION
 
       case $BOARD_SELECTION in
@@ -86,9 +87,10 @@ select_board() {
         8) BOARD="ARM-SBC-KICK-3568"; CHIP="rk3568"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-kick-rk3568_defconfig"; KERNEL_DEFCONFIG="armsbc-3568_defconfig"; DEVICE_TREE="rk3568-armsbc-kick.dts" ;;
         9) BOARD="ARM-SBC-IDO-3576"; CHIP="rk3576"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-ido-rk3576_defconfig"; KERNEL_DEFCONFIG="armsbc-3576_defconfig"; DEVICE_TREE="rk3576-armsbc-ido.dts" ;;
         10) BOARD="ARM-SBC-EDGE-3576"; CHIP="rk3576"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-edge-rk3576_defconfig"; KERNEL_DEFCONFIG="armsbc-3576_defconfig"; DEVICE_TREE="rk3576-armsbc-edge.dts" ;;
-        11) BOARD="ARM-SBC-DCA-3588"; CHIP="rk3588"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-dca-rk3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3568-armsbc-dca.dts" ;;
+        11) BOARD="ARM-SBC-DCA-3588"; CHIP="rk3588"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-dca-rk3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3588-armsbc-dca.dts" ;;
         12) BOARD="ARM-SBC-EDGE-3588"; CHIP="rk3588"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-edge-rk3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3588-armsbc-edge.dts" ;;
-        13) BOARD="ARM-SBC-RWA-3588"; CHIP="rk3568"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rwa-rk3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3588-armsbc-rwa.dts" ;;
+        13) BOARD="ARM-SBC-RWA-3588"; CHIP="rk3588"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rwa-rk3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3588-armsbc-rwa.dts" ;;
+        14) BOARD="ARM-SBC-KICK-3588"; CHIP="rk3588"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-kick-rk3588_defconfig"; KERNEL_DEFCONFIG="armsbc-3588_defconfig"; DEVICE_TREE="rk3588-armsbc-kick.dts" ;;
         *) log "[ERROR] Invalid Rockchip board selection. Please try again."; continue ;;
       esac
 

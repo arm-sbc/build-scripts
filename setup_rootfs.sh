@@ -138,7 +138,7 @@ if [[ "$INSTALL_DESKTOP" =~ ^[Yy]$ ]]; then
   fi
 
   # Call external desktop installer
-  ./postinstall-desktop.sh "$FRESH_DIR" "$ARCH" "$QEMU_BIN" "$VERSION"
+  ./postinstall-desktop.sh "$ROOTFS_DIR" "$ARCH" "$QEMU_BIN" "$VERSION"
 else
   info "Skipping desktop and utilities installation."
 fi
