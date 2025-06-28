@@ -78,7 +78,8 @@ log "INFO" "Platform detected: $PLATFORM"
 
 # Cleanup existing images
 log "INFO" "Cleaning up existing images in $OUT_DIR..."
-rm -f "$OUT_DIR"/*.img || log "WARN" "No existing images to remove."
+SDCARD_IMAGE="$OUT_DIR/${IMAGE_BASENAME}.img"
+[ -f "$SDCARD_IMAGE" ] && rm -f "$SDCARD_IMAGE"
 
 # Create SD card image
 IMAGE_BASENAME=$(basename "$dtb_file" .dtb)

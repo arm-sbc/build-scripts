@@ -143,12 +143,27 @@ compile_uboot() {
 
   # Prepare output directory
   mkdir -p "$OUTPUT_DIR"
+  
+  # Set build directory explicitly
+  UBOOT_BUILD_DIR="$(pwd)"
 
   # Copy output files based on board and configuration
   log "Copying U-Boot output files to $OUTPUT_DIR"
-  cp idbloader.img u-boot-rockchip.bin "$OUTPUT_DIR/" 2>/dev/null || warn "idbloader.img or u-boot-rockchip.bin not found, skipping."
-  cp u-boot.itb "$OUTPUT_DIR/" 2>/dev/null || warn "u-boot.itb not found, skipping."
-  
+  cp "$UBOOT_BUILD_DIR/idbloader.img" "$OUTPUT_DIR/" || {
+  error "idbloader.img not found! U-Boot build may have failed."
+  exit 1
+ }
+
+ cp "$UBOOT_BUILD_DIR/u-boot.itb" "$OUTPUT_DIR/" || {
+  error "u-boot.itb not found! U-Boot build may have failed."
+  exit 1
+ }
+
+ cp "$UBOOT_BUILD_DIR/u-boot-rockchip.bin" "$OUTPUT_DIR/" || {
+  error "u-boot-rockchip.bin not found! Check build output."
+  exit 1
+ }
+ 
   log "U-Boot compiled and copied to $OUTPUT_DIR successfully."
   cd - >/dev/null
 }
