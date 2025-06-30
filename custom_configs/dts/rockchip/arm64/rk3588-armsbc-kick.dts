@@ -20,8 +20,6 @@
 	aliases {
 		mmc0 = &sdhci;
 		mmc1 = &sdmmc;
-		ethernet0 = &pcie2x1l1;
-		ethernet1 = &pcie2x1l2;
 	};
 
 	chosen {
@@ -49,23 +47,27 @@
  
 		system_led@1 {
 			gpios = <&gpio3 RK_PB7 GPIO_ACTIVE_HIGH>;
-			label = "system_led";
 			linux,default-trigger = "heartbeat";
 			linux,default-trigger-delay-ms = <0>;
 		};
 		
 		work_led {
 			gpios = <&gpio1 RK_PA4 GPIO_ACTIVE_HIGH>;
-			pinctrl-names = "default";
 			pinctrl-0 = <&work_leds_gpio>;
-		};
-		
-		Fan_enable {
-			gpios = <&gpio4 RK_PC2 GPIO_ACTIVE_HIGH>;
-			pinctrl-names = "default";
 			default-state = "on";
+		};
 	};
 	
+	fan: pwm-fan {
+		compatible = "pwm-fan";
+		cooling-levels = <0 80 160 255>; // Simple 3-level control
+		fan-supply = <&vcc5v0_sys>;      // Replace with correct regulator if needed
+		pwms = <&pwm12 0 50000 0>;       // 50 kHz, active high
+		#cooling-cells = <2>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pwm12_pins>;
+	};
+
 	hdmi0-con {
 		compatible = "hdmi-connector";
 		type = "a";
@@ -222,14 +224,13 @@
 
 	vcc_3v3_sd_s0: vcc-3v3-sd-s0-regulator {
 		compatible = "regulator-fixed";
-		gpio = <&gpio0 RK_PB7 GPIO_ACTIVE_HIGH>;
+		regulator-name = "vcc_3v3_sd_s0";
+		#regulator-boot-on;
+		#regulator-always-on;
+		gpio = <&gpio0 RK_PB7 GPIO_ACTIVE_HIGH>;  
+		enable-active-high;
 		pinctrl-names = "default";
 		pinctrl-0 = <&sd_s0_pwr>;
-		regulator-name = "vcc_3v3_sd_s0";
-		regulator-boot-on;
-		regulator-always-on;
-		enable-active-high;
-		vin-supply = <&vcc12v_dcin>;
 	};
 	
 	pcie20_avdd0v85: pcie20-avdd0v85 {
@@ -277,11 +278,8 @@
 		regulator-name = "vcc3v3_pcie20_wifi";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
+		gpios = <&gpio0 RK_PC4 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
-		/*
-		* wifi_reg_on 是在vbat、vddio稳定后才使能，在reset-gpios前拉高，所以
-		* 放到PCIe的电源节点中才满足模块时序，引用wifi_poweren_gpio。
-		*/
 		pinctrl-0 = <&wifi_power_en>;
 		startup-delay-us = <5000>;
 		vin-supply = <&vcc12v_dcin>;
@@ -294,7 +292,6 @@
 		regulator-max-microvolt = <3300000>;
 		enable-active-high;
 		gpios = <&gpio2 RK_PC5 GPIO_ACTIVE_HIGH>;
-		//startup-delay-us = <5000>;
 		vin-supply = <&vcc12v_dcin>;
 		regulator-boot-on;
 		regulator-always-on;
@@ -306,10 +303,8 @@
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		enable-active-high;
-		//gpios = <&gpio2 RK_PC5 GPIO_ACTIVE_HIGH>;
 		startup-delay-us = <5000>;
 		vin-supply = <&vcc12v_dcin>;
-		};
 	};
 };
 
@@ -361,13 +356,32 @@
 	status = "okay";
 };
 
+&package_thermal {
+    polling-delay = <1000>;
+
+    trips {
+        cpu_fan_trip: cpu-fan-trip {
+            temperature = <60000>;   // 60°C
+            hysteresis = <2000>;
+            type = "active";
+        };
+    };
+
+    cooling-maps {
+        map0 {
+            trip = <&cpu_fan_trip>;
+            cooling-device = <&fan 0 2>;  // Fan duty levels (0–2 from your cooling-levels)
+        };
+    };
+};
 
 &pcie2x1l0 {
         reset-gpios = <&gpio4 RK_PA5 GPIO_ACTIVE_HIGH>;
         pinctrl-names = "default";
         vpcie3v3-supply = <&vcc3v3_pcie20_wifi>;
-        pinctrl-0 = <&pcie2_reset>, <&wifi_host_wake_irq>;
+        pinctrl-0 = <&pcie2x1l0_reset>, <&pcie2x1l0_wake>, <&pcie2x1l0_clk>, <&wifi_host_wake_irq>;
         rockchip,skip-scan-in-resume;
+        rockchip,perst-inactive-ms = <500>;
         status = "okay";
         
 	pcie@0,0 {
@@ -389,11 +403,15 @@
 
 &pcie2x1l1 {
 	reset-gpios = <&gpio4 RK_PA2 GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pcie2x1l1_reset>, <&pcie2x1l1_clk>, <&pcie2x1l1_wake>;
 	status = "okay";
 };
 
 &pcie2x1l2 {
 	reset-gpios = <&gpio4 RK_PB0 GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pcie2x1l2_reset>, <&pcie2x1l2_clk>, <&pcie2x1l2_wake>;
 	status = "okay";
 };
 
@@ -405,7 +423,7 @@
 	reset-gpios = <&gpio4 RK_PB6 GPIO_ACTIVE_HIGH>;
 	vpcie3v3-supply = <&vcc3v3_pcie30>;
 	pinctrl-names = "default";
-	pinctrl-0 = <&pcie20x1_0_clkreqn_m1>;
+	pinctrl-0 = <&pcie30x4_clk>, <&pcie30x4_reset>, <&pcie30x4_wake>;
 	status = "okay";
 };
 
@@ -561,7 +579,7 @@
 		HPVDD-supply = <&vcca_3v3_s0>;
 		PVDD-supply = <&vcca_3v3_s0>;
 		#sound-dai-cells = <0>;
-		};
+	};
 };
 
 &i2s0_8ch {
@@ -610,7 +628,13 @@
 			rockchip,pins = <1 RK_PA4 RK_FUNC_GPIO &pcfg_pull_down>;
 		};
 	};
-
+	
+	pwm {
+		pwm12_pins: pwm12-pins {
+    		rockchip,pins = <4 RK_PC2 RK_FUNC_GPIO &pcfg_pull_none>; 
+		};
+	};
+	
 	sdmmc {
 		sd_s0_pwr: sd-s0-pwr {
 			rockchip,pins = <0 RK_PB7 RK_FUNC_GPIO &pcfg_pull_up>;
@@ -634,12 +658,52 @@
 	};
 
 	pcie {
-		pcie20x1_0_clkreqn_m1: pcie20x1-0-clkreqn-m1 {
+		pcie30x4_clk: pcie30x4-clk {
 			rockchip,pins = <4 RK_PB4 RK_FUNC_GPIO &pcfg_output_low>;
 			};
 			
-		pcie2_reset: pcie2-reset {
+		pcie30x4_reset: pcie30x4-reset {
+			rockchip,pins = <4 RK_PB3 RK_FUNC_GPIO &pcfg_output_low>;
+			};
+		
+		pcie30x4_wake: pcie30x4-wake {
+			rockchip,pins = <4 RK_PB5 RK_FUNC_GPIO &pcfg_output_low>;
+			};	
+		
+		pcie2x1l0_reset: pcie2x1l0-reset {
 			rockchip,pins = <4 RK_PA5 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+		
+		pcie2x1l0_clk:  pcie2x1l0-clk {
+			rockchip,pins = <4 RK_PA3 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+		
+		pcie2x1l0_wake: pcie2x1l0-wake {
+			rockchip,pins = <4 RK_PA4 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+		
+		pcie2x1l1_reset: cie2x1l1-reset {
+			rockchip,pins = <4 RK_PA2 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+		
+		pcie2x1l1_clk:  pcie2x1l1-clk {
+			rockchip,pins = <4 RK_PA0 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+		
+		pcie2x1l1_wake: pcie2x1l1-wake {
+			rockchip,pins = <4 RK_PA1 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+		
+		pcie2x1l2_reset: cie2x1l2-reset {
+			rockchip,pins = <4 RK_PB0 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+		
+		pcie2x1l2_clk: pcie2x1l2-clk {
+			rockchip,pins = <4 RK_PA6 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+		
+		pcie2x1l2_wake: pcie2x1l2-wake {
+			rockchip,pins = <4 RK_PA7 RK_FUNC_GPIO &pcfg_pull_none>;
 		};
 	};
 	
@@ -724,9 +788,19 @@
 	status = "okay";
 };
 
-&pwm14 {
+&hdmi_receiver_cma {
 	status = "okay";
-	pinctrl-0 = <&pwm14m0_pins>;
+};
+
+&hdmi_receiver {
+	hpd-gpios = <&gpio1 RK_PD5 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&hdmim1_rx_cec &hdmim1_rx_hpdin &hdmim1_rx_scl &hdmim1_rx_sda &hdmirx_det>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&pwm12 {
+	status = "okay";
 };
 
 &saradc {
@@ -745,18 +819,23 @@
 };
 
 &sdmmc {
-	bus-width = <4>;
-	cap-mmc-highspeed;
-	cap-sd-highspeed;
-	cd-gpios = <&gpio0 RK_PA4 GPIO_ACTIVE_LOW>;
-	disable-wp;
-	max-frequency = <200000000>;
-	no-sdio;
-	no-mmc;
+    status = "okay";
+    bus-width = <4>;
+    cap-sd-highspeed;
+    cd-gpios = <&gpio0 RK_PA4 GPIO_ACTIVE_LOW>;
+    disable-wp;
+    max-frequency = <200000000>;
+    no-sdio;
+    no-mmc;
+    sd-uhs-sdr12;
+	sd-uhs-sdr25;
+	sd-uhs-sdr50;
+	sd-uhs-ddr50;
 	sd-uhs-sdr104;
-	vmmc-supply = <&vcc_3v3_s3>;
-	vqmmc-supply = <&vcc_3v3_sd_s0>;
-	status = "okay";
+  	vmmc-supply = <&vcc_3v3_sd_s0>;
+	vqmmc-supply = <&vccio_sd_s0>;   
+    pinctrl-names = "default";
+    pinctrl-0 = <&sdmmc_clk &sdmmc_cmd &sdmmc_det &sdmmc_bus4>;
 };
 
 &spi2 {
@@ -1083,23 +1162,8 @@
 	status = "okay";
 };
 
-&uart0 {
-	pinctrl-0 = <&uart0m2_xfer>;
-	status = "okay";
-};
-
 &uart2 {
 	pinctrl-0 = <&uart2m0_xfer>;
-	status = "okay";
-};
-
-&uart6 {
-	pinctrl-0 = <&uart6m0_xfer>;
-	status = "okay";
-};
-
-&uart7 {
-	pinctrl-0 = <&uart7m0_xfer>;
 	status = "okay";
 };
 
@@ -1110,7 +1174,7 @@
 	status = "okay";
 
 	bluetooth {
-		compatible = "realtek,8852be-bt";
+		compatible = "realtek,rtl8822cs-bt";
 		clocks = <&hym8563>;
 		clock-names = "ext_clock";
 		shutdown-gpios       = <&gpio0 RK_PC6 GPIO_ACTIVE_HIGH>;  // BT_REG_ON_H
@@ -1120,6 +1184,7 @@
 		vddio-supply = <&vcc_1v8_s0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&bt_reset_gpio>, <&bt_wake_gpio>, <&bt_irq_gpio>;
+		status = "okay";
 	};
 };
 
@@ -1145,6 +1210,7 @@
 
 &usbdp_phy0 {
 	mode-switch;
+	svid = <0xff01>;
 	orientation-switch;
 	sbu1-dc-gpios = <&gpio1 RK_PB4 GPIO_ACTIVE_HIGH>;
 	sbu2-dc-gpios = <&gpio1 RK_PB5 GPIO_ACTIVE_HIGH>;

@@ -140,7 +140,7 @@ network:
       match:
         name: "e*"
       dhcp4: true
-NETPLAN_EOF
+EOF
 
 # --- 9. Cleanup ---
 echo "[INFO] Cleaning up..."
