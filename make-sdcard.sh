@@ -280,4 +280,3 @@ if [ -n "$BUILD_START_TIME" ]; then
 else
   echo "[WARN] BUILD_START_TIME not set. Cannot show elapsed time."
 fi
-
