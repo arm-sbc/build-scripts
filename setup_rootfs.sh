@@ -1,39 +1,53 @@
 #!/bin/bash
 
-# Color Scheme
-yellow="\033[1;33m"
-blue="\033[1;34m"
-red="\033[1;31m"
-green="\033[1;32m"
-reset="\033[0m"
+SCRIPT_NAME="setup_rootfs.sh"
+BUILD_START_TIME=$(date +%s)
 
-# Function to print messages with colors
-function info() {
-    echo -e "${blue}[INFO] $1${reset}"
+# Logging function
+log_internal() {
+  local LEVEL="$1"
+  local MESSAGE="$2"
+  local TIMESTAMP="[$(date +'%Y-%m-%d %H:%M:%S')]"
+  local PREFIX COLOR RESET
+
+  case "$LEVEL" in
+    INFO)   COLOR="\033[1;34m"; PREFIX="INFO" ;;
+    WARN)   COLOR="\033[1;33m"; PREFIX="WARN" ;;
+    ERROR)  COLOR="\033[1;31m"; PREFIX="ERROR" ;;
+    DEBUG)  COLOR="\033[1;36m"; PREFIX="DEBUG" ;;
+    PROMPT) COLOR="\033[1;32m"; PREFIX="PROMPT" ;;
+    *)      COLOR="\033[0m";   PREFIX="INFO" ;;
+  esac
+
+  RESET="\033[0m"
+  local LOG_LINE="${TIMESTAMP}[$PREFIX][$SCRIPT_NAME] $MESSAGE"
+
+  if [ -t 1 ]; then
+    echo -e "${COLOR}${LOG_LINE}${RESET}" | tee -a "${LOG_FILE:-build.log}"
+  else
+    echo "$LOG_LINE" >> "${LOG_FILE:-build.log}"
+  fi
 }
 
-function warning() {
-    echo -e "${yellow}[WARNING] $1${reset}"
-}
+# Logging aliases
+info()    { log_internal INFO "$@"; }
+warn()    { log_internal WARN "$@"; }
+error()   { log_internal ERROR "$@"; exit 1; }
+debug()   { log_internal DEBUG "$@"; }
+success() { log_internal PROMPT "$@"; }
+prompt()  { log_internal PROMPT "$@"; }  # <--- Fixes your error
+log()     { log_internal INFO "$@"; }
 
-function error() {
-    echo -e "${red}[ERROR] $1${reset}"
-}
-
-function prompt() {
-    echo -e "${green}[PROMPT] $1${reset}"
-}
-
-# Alias 'warn' to 'warning' for convenience
-function warn() {
-    warning "$@"
-}
-
-# Check if required variables are set
+# --- Validate required variables ---
 if [ -z "$BOARD" ] || [ -z "$ARCH" ] || [ -z "$VERSION" ]; then
-    error "Required variables BOARD, ARCH, or VERSION are missing. Exiting."
-    exit 1
+  error "Required variables BOARD, ARCH, or VERSION are missing. Exiting."
 fi
+
+# Optional debug output
+debug "BOARD=$BOARD"
+debug "ARCH=$ARCH"
+debug "VERSION=$VERSION"
+debug "OUTPUT_DIR=${OUTPUT_DIR:-undefined}"
 
 info "Starting root filesystem creation for Board: $BOARD, Architecture: $ARCH, Version: $VERSION"
 
@@ -436,3 +450,14 @@ else
 fi
 
 info "Rootfs creation and image options completed."
+
+# --- Script Footer ---
+BUILD_END_TIME=$(date +%s)
+BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+minutes=$((BUILD_DURATION / 60))
+seconds=$((BUILD_DURATION % 60))
+
+success "RootFS setup completed in ${minutes}m ${seconds}s"
+info "Exiting script: $SCRIPT_NAME"
+exit 0
+

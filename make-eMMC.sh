@@ -3,17 +3,41 @@ set -e
 
 SCRIPT_NAME="make-eMMC.sh"
 # Function to log messages with colors
-log() {
-  local MSG_TYPE=$1
-  local MESSAGE=$2
+BUILD_START_TIME=$(date +%s)
+: "${LOG_FILE:=build.log}"
+touch "$LOG_FILE"
 
-  case $MSG_TYPE in
-    INFO) echo -e "\033[1;34m[$(date +"%Y-%m-%d %H:%M:%S")][INFO][$SCRIPT_NAME]\033[0m $MESSAGE" ;;
-    WARN) echo -e "\033[1;33m[$(date +"%Y-%m-%d %H:%M:%S")][WARN][$SCRIPT_NAME]\033[0m $MESSAGE" ;;
-    ERROR) echo -e "\033[1;31m[$(date +"%Y-%m-%d %H:%M:%S")][ERROR][$SCRIPT_NAME]\033[0m $MESSAGE" ;;
-    *) echo "[$(date +"%Y-%m-%d %H:%M:%S")][$MSG_TYPE][$SCRIPT_NAME] $MESSAGE" ;;
+log_internal() {
+  local LEVEL="$1"
+  local MESSAGE="$2"
+  local TIMESTAMP="[$(date +'%Y-%m-%d %H:%M:%S')]"
+  local PREFIX COLOR RESET
+
+  case "$LEVEL" in
+    INFO)   COLOR="\033[1;34m"; PREFIX="INFO" ;;
+    WARN)   COLOR="\033[1;33m"; PREFIX="WARN" ;;
+    ERROR)  COLOR="\033[1;31m"; PREFIX="ERROR" ;;
+    DEBUG)  COLOR="\033[1;36m"; PREFIX="DEBUG" ;;
+    PROMPT) COLOR="\033[1;32m"; PREFIX="PROMPT" ;;
+    *)      COLOR="\033[0m";   PREFIX="INFO" ;;
   esac
+  RESET="\033[0m"
+  local LOG_LINE="${TIMESTAMP}[$PREFIX][$SCRIPT_NAME] $MESSAGE"
+
+  if [ -t 1 ]; then
+    echo -e "${COLOR}${LOG_LINE}${RESET}" | tee -a "$LOG_FILE"
+  else
+    echo "$LOG_LINE" >> "$LOG_FILE"
+  fi
 }
+
+# Aliases
+info()    { log_internal INFO "$@"; }
+warn()    { log_internal WARN "$@"; }
+error()   { log_internal ERROR "$@"; exit 1; }
+debug()   { log_internal DEBUG "$@"; }
+success() { log_internal PROMPT "$@"; }
+log()     { log_internal INFO "$@"; }  # Legacy alias
 
 pause() {
 log ERROR "Press any key to quit."
@@ -246,7 +270,7 @@ log INFO "Creating final update.img using rkImageMaker..."
 $RKIMAGEMAKER -$TAG "$LOADER_BIN" "$RAW_IMG" "$OUT_UPDATE_IMG" -os_type:linux || pause
 
 #--- Final Check ---#
-[ -f "$OUT_UPDATE_IMG" ] && echo "[SUCCESS] update-eMMC.img created successfully: $OUT_UPDATE_IMG" || pause
+[ -f "$OUT_UPDATE_IMG" ] && success "update-eMMC.img created successfully: $OUT_UPDATE_IMG" || pause
 
 if [ -n "$BUILD_START_TIME" ]; then
   BUILD_END_TIME=$(date +%s)

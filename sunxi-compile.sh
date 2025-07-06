@@ -1,27 +1,52 @@
 #!/bin/bash
 
-# Script Name: sunxi-compile.sh
+SCRIPT_NAME="sunxi-compile.sh"
+BUILD_START_TIME=$(date +%s)
 
-# Global Variables
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OUT_DIR="$SCRIPT_DIR/OUT"
+# --- Unified Logging Setup ---
+: "${LOG_FILE:=build.log}"  # fallback if not exported
+touch "$LOG_FILE"
 
-# Ensure the environment is prepared
+log_internal() {
+  local LEVEL="$1"
+  local MESSAGE="$2"
+  local TIMESTAMP="[$(date +'%Y-%m-%d %H:%M:%S')]"
+  local PREFIX COLOR RESET
+
+  case "$LEVEL" in
+    INFO)   COLOR="\033[1;34m"; PREFIX="INFO" ;;
+    WARN)   COLOR="\033[1;33m"; PREFIX="WARN" ;;
+    ERROR)  COLOR="\033[1;31m"; PREFIX="ERROR" ;;
+    DEBUG)  COLOR="\033[1;36m"; PREFIX="DEBUG" ;;
+    PROMPT) COLOR="\033[1;32m"; PREFIX="PROMPT" ;;
+    *)      COLOR="\033[0m";   PREFIX="INFO" ;;
+  esac
+  RESET="\033[0m"
+  local LOG_LINE="${TIMESTAMP}[$PREFIX][$SCRIPT_NAME] $MESSAGE"
+
+  if [ -t 1 ]; then
+    echo -e "${COLOR}${LOG_LINE}${RESET}" | tee -a "$LOG_FILE"
+  else
+    echo "$LOG_LINE" >> "$LOG_FILE"
+  fi
+}
+
+# --- Aliases ---
+info()    { log_internal INFO "$@"; }
+warn()    { log_internal WARN "$@"; }
+error()   { log_internal ERROR "$@"; exit 1; }
+debug()   { log_internal DEBUG "$@"; }
+success() { log_internal PROMPT "$@"; }
+log()     { log_internal INFO "$@"; }
+
+# --- Validate environment ---
 if [ -z "$BOARD" ] || [ -z "$CHIP" ] || [ -z "$UBOOT_DEFCONFIG" ]; then
-  echo -e "\033[1;31m[ERROR] Required environment variables not set. Please run set_env.sh first.\033[0m"
-  exit 1
+  error "Required environment variables not set. Please run set_env.sh first."
 fi
 
-# Function to log messages
-log() {
-  echo -e "\033[1;34m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m"
-}
-
-# Function to handle errors
-error() {
-  echo -e "\033[1;31m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m" >&2
-  exit 1
-}
+# --- Globals ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OUT_DIR="$SCRIPT_DIR/OUT"
 
 # Function to check cross-compiler
 check_cross_compiler() {
@@ -101,7 +126,6 @@ add_dtb_entry() {
   fi
 }
 
-# Function to compile ATF
 compile_atf() {
   if [[ "$ARCH" != "arm64" ]]; then
     log "Skipping ATF compilation: Not required for $ARCH."
@@ -113,24 +137,29 @@ compile_atf() {
     return
   fi
 
-  # Define the expected BL31 path based on the platform
-  PLATFORM=$(map_chip_to_platform)
-  BL31_PATH="arm-trusted-firmware/build/${PLATFORM}/release/bl31.bin"
+  # Determine platform name for ATF build
+  if [[ "$CHIP" == a* ]]; then
+    # Allwinner: use PROCESSOR_FAMILY as platform
+    PLATFORM="$PROCESSOR_FAMILY"
+  else
+    # Rockchip or others: use map_chip_to_platform function
+    PLATFORM=$(map_chip_to_platform)
+  fi
 
-  # Check if the BL31 binary already exists
+  BL31_PATH="trusted-firmware-a/build/${PLATFORM}/release/bl31.bin"
+
+  # Use prebuilt BL31 if it exists
   if [ -f "$BL31_PATH" ]; then
     log "BL31 already exists at $BL31_PATH. Skipping ATF compilation."
     export BL31="$SCRIPT_DIR/$BL31_PATH"
     return
   fi
 
-  log "Compiling Trusted Firmware for $CHIP..."
-  cd arm-trusted-firmware || error "Failed to enter ATF directory."
+  log "Compiling Trusted Firmware for $CHIP (Platform: $PLATFORM)..."
+  cd trusted-firmware-a || error "Failed to enter ATF directory."
 
-  # Compile ATF with the correct platform and options
   make CROSS_COMPILE="$CROSS_COMPILE" PLAT="$PLATFORM" DEBUG=0 bl31 -j$(nproc) || error "Trusted Firmware compilation failed."
 
-  # Verify the BL31 binary
   export BL31="$SCRIPT_DIR/$BL31_PATH"
   if [ ! -f "$BL31" ]; then
     error "BL31 file not found after compilation. Expected path: $BL31"
@@ -380,6 +409,15 @@ case "$1" in
     apply_kernel_patches
     compile_kernel
     compile_dts
+    ;;    
+  uboot+kernel)
+    BUILD_OPTION="uboot+kernel"
+    compile_atf
+    apply_uboot_patches
+    compile_uboot
+    apply_kernel_patches
+    compile_kernel
+    compile_dts
     ;;
   all)
     BUILD_OPTION="all"
@@ -397,4 +435,12 @@ case "$1" in
 esac
 
 log "Compilation process completed successfully."
+
+BUILD_END_TIME=$(date +%s)
+BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+minutes=$((BUILD_DURATION / 60))
+seconds=$((BUILD_DURATION % 60))
+success "$SCRIPT_NAME completed in ${minutes}m ${seconds}s"
+info "Exiting script: $SCRIPT_NAME"
+exit 0
 

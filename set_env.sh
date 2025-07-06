@@ -1,13 +1,43 @@
 #!/bin/bash
 
-# Script Name: set_env.sh
+SCRIPT_NAME="set_env.sh"
+# --- Logging Setup (Shared Across Scripts) ---
+BUILD_START_TIME=$(date +%s)
+: "${LOG_FILE:=build.log}"
+touch "$LOG_FILE"
 
-export BUILD_START_TIME=$(date +%s)
+log_internal() {
+  local LEVEL="$1"
+  local MESSAGE="$2"
+  local TIMESTAMP="[$(date +'%Y-%m-%d %H:%M:%S')]"
+  local PREFIX COLOR RESET
 
-# Function to log messages with timestamps
-log() {
-  echo -e "\033[1;34m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m"
+  case "$LEVEL" in
+    INFO)   COLOR="\033[1;34m"; PREFIX="INFO" ;;
+    WARN)   COLOR="\033[1;33m"; PREFIX="WARN" ;;
+    ERROR)  COLOR="\033[1;31m"; PREFIX="ERROR" ;;
+    DEBUG)  COLOR="\033[1;36m"; PREFIX="DEBUG" ;;
+    PROMPT) COLOR="\033[1;32m"; PREFIX="PROMPT" ;;
+    *)      COLOR="\033[0m";   PREFIX="INFO" ;;
+  esac
+  RESET="\033[0m"
+
+  local LOG_LINE="${TIMESTAMP}[$PREFIX][$SCRIPT_NAME] $MESSAGE"
+
+  if [ -t 1 ]; then
+    echo -e "${COLOR}${LOG_LINE}${RESET}" | tee -a "$LOG_FILE"
+  else
+    echo "$LOG_LINE" >> "$LOG_FILE"
+  fi
 }
+
+# --- Aliases ---
+info()    { log_internal INFO "$@"; }
+warn()    { log_internal WARN "$@"; }
+error()   { log_internal ERROR "$@"; exit 1; }
+debug()   { log_internal DEBUG "$@"; }
+success() { log_internal PROMPT "$@"; }  # optional green prompt
+log()     { log_internal INFO "$@"; }    # legacy compatibility
 
 # Function to install required packages
 install_packages() {
@@ -110,7 +140,7 @@ select_board() {
       read -p "Enter the number corresponding to your Allwinner board: " BOARD_SELECTION
 
       case $BOARD_SELECTION in
-        1) BOARD="ARM-SBC-RWA-A64"; CHIP="a64"; PROCESSOR_FAMILY="sun50i"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rwa-a64_defconfig"; KERNEL_DEFCONFIG="armsbc-a64_defconfig"; DEVICE_TREE="sun50i-a64-armsbc-rwa.dts" ;;
+        1) BOARD="ARM-SBC-RWA-A64"; CHIP="a64"; PROCESSOR_FAMILY="sun50i_a64"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rwa-a64_defconfig"; KERNEL_DEFCONFIG="armsbc-a64_defconfig"; DEVICE_TREE="sun50i-a64-armsbc-rwa.dts" ;;
         2) BOARD="ARM-SBC-RP-A40i"; CHIP="a40i"; PROCESSOR_FAMILY="sun8i"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-rp-a40i_defconfig"; KERNEL_DEFCONFIG="armsbc-a40i_defconfig"; DEVICE_TREE="sun8i-a40i-armsbc-rp.dts" ;;
         3) BOARD="ARM-SBC-RP-T527"; CHIP="t527"; PROCESSOR_FAMILY="sun55i"; ARCH="arm64"; CROSS_COMPILE="aarch64-linux-gnu-"; UBOOT_DEFCONFIG="armsbc-rp-t527_defconfig"; KERNEL_DEFCONFIG="armsbc-t527_defconfig"; DEVICE_TREE="sun55i-t527-armsbc-rp.dts" ;;
         4) BOARD="ARM-SBC-XZ-A83T"; CHIP="a83t"; PROCESSOR_FAMILY="sun8i"; ARCH="arm"; CROSS_COMPILE="arm-linux-gnueabihf-"; UBOOT_DEFCONFIG="armsbc-xz-a83t_defconfig"; KERNEL_DEFCONFIG="armsbc-a83_defconfig"; DEVICE_TREE="sun8i-a83t-armsbc-xz.dts" ;;
@@ -173,7 +203,7 @@ prepare_output_directory() {
 # Function to download sources dynamically based on the build option
 download_sources() {
  case "$BUILD_OPTION" in
-    "uboot"|"all")
+     "uboot"|"all"|"uboot+kernel")
       log "Downloading U-Boot source..."
       if [ ! -d "u-boot" ]; then
         git clone https://github.com/u-boot/u-boot.git || { log "[ERROR] Failed to clone U-Boot repository."; exit 1; }
@@ -218,14 +248,18 @@ download_sources() {
       fi
 
       # Allwinner-specific downloads for U-Boot
-      if [[ "$CHIP" == "a"* ]]; then
-        log "Downloading Trusted Firmware (ATF) for Allwinner..."
-        if [ ! -d "arm-trusted-firmware" ]; then
-          git clone https://git.trustedfirmware.org/TF-A/trusted-firmware-a.git || { log "[ERROR] Failed to clone ATF repository."; exit 1; }
-        else
-          log "ATF source already exists. Skipping download."
-        fi
-      fi
+if [ -d "trusted-firmware-a/.git" ]; then
+  log "ATF source already exists. Pulling latest changes..."
+  cd trusted-firmware-a
+  git pull origin master || log "Failed to pull latest ATF changes. Using existing code."
+  cd ..
+else
+  log "Cloning ATF repository..."
+  rm -rf trusted-firmware-a  # Optional safety
+  git clone https://git.trustedfirmware.org/TF-A/trusted-firmware-a.git || {
+    log "[ERROR] Failed to clone ATF repository."; exit 1;
+  }
+fi
       ;;
     "kernel")
       log "Kernel sources will be downloaded separately during kernel selection."
@@ -310,7 +344,7 @@ download_kernel_source() {
 build_options() {
   log "Select the build option:"
   PS3="Enter your choice: "
-  options=("U-Boot only" "Kernel only" "RootFS only" "All")
+  options=("U-Boot only" "Kernel only" "U-Boot + Kernel" "RootFS only" "All")
   select opt in "${options[@]}"; do
     case $opt in
       "U-Boot only")
@@ -327,6 +361,18 @@ build_options() {
         download_kernel_source
         export BOARD CHIP ARCH CROSS_COMPILE KERNEL_VERSION UBOOT_DEFCONFIG KERNEL_DEFCONFIG
         log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, CHIP=$CHIP, ARCH=$ARCH, CROSS_COMPILE=$CROSS_COMPILE, KERNEL_VERSION=$KERNEL_VERSION"
+        $COMPILE_SCRIPT kernel || { log "[ERROR] Failed to build Kernel."; exit 1; }
+        break
+        ;;
+      "U-Boot + Kernel")
+        BUILD_OPTION="uboot+kernel"
+        select_kernel_version
+        download_sources
+        download_kernel_source
+        export BOARD CHIP ARCH CROSS_COMPILE KERNEL_VERSION UBOOT_DEFCONFIG KERNEL_DEFCONFIG
+        log "Debug: BUILD_OPTION=$BUILD_OPTION, BOARD=$BOARD, CHIP=$CHIP, ARCH=$ARCH, CROSS_COMPILE=$CROSS_COMPILE, KERNEL_VERSION=$KERNEL_VERSION"
+
+        $COMPILE_SCRIPT uboot || { log "[ERROR] Failed to build U-Boot."; exit 1; }
         $COMPILE_SCRIPT kernel || { log "[ERROR] Failed to build Kernel."; exit 1; }
         break
         ;;
@@ -379,3 +425,12 @@ select_board
 clean_build_directories
 prepare_output_directory
 build_options
+
+# --- Script Footer ---
+BUILD_END_TIME=$(date +%s)
+BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+minutes=$((BUILD_DURATION / 60))
+seconds=$((BUILD_DURATION % 60))
+success "Script finished in ${minutes}m ${seconds}s"
+info "Exiting script: $SCRIPT_NAME"
+exit 0

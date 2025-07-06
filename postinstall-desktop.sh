@@ -1,6 +1,6 @@
 #!/bin/bash
-# Script Name: postinstall-desktop.sh
-
+SCRIPT_NAME="postinstall-desktop.sh"
+BUILD_START_TIME=$(date +%s)
 # --- Color Logging ---
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -167,4 +167,14 @@ else
 fi
 
 success "✅ Post-installation complete: Desktop, hostname, and permissions are configured safely."
+
+# --- Script Footer ---
+BUILD_END_TIME=$(date +%s)
+BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+minutes=$((BUILD_DURATION / 60))
+seconds=$((BUILD_DURATION % 60))
+
+success "Desktop post-install completed in ${minutes}m ${seconds}s"
+info "Exiting script: $SCRIPT_NAME"
+exit 0
 

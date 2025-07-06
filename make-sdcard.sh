@@ -2,24 +2,58 @@
 BUILD_START_TIME=$(date +%s)
 SCRIPT_NAME="make-sdcard.sh"
 
-# Near the top of make-sdcard.sh (before anything else)
 if [ "$EUID" -ne 0 ]; then
   echo "[INFO][make-sdcard.sh] Re-running script with sudo..."
   exec sudo "$0" "$@"
 fi
 
 # Function to log messages with colors
-log() {
-  local MSG_TYPE=$1
-  local MESSAGE=$2
+#!/bin/bash
 
-  case $MSG_TYPE in
-    INFO) echo -e "\033[1;34m[$(date +"%Y-%m-%d %H:%M:%S")][INFO][$SCRIPT_NAME]\033[0m $MESSAGE" ;;
-    WARN) echo -e "\033[1;33m[$(date +"%Y-%m-%d %H:%M:%S")][WARN][$SCRIPT_NAME]\033[0m $MESSAGE" ;;
-    ERROR) echo -e "\033[1;31m[$(date +"%Y-%m-%d %H:%M:%S")][ERROR][$SCRIPT_NAME]\033[0m $MESSAGE" ;;
-    *) echo "[$(date +"%Y-%m-%d %H:%M:%S")][$MSG_TYPE][$SCRIPT_NAME] $MESSAGE" ;;
+BUILD_START_TIME=$(date +%s)
+SCRIPT_NAME="make-sdcard.sh"
+
+if [ "$EUID" -ne 0 ]; then
+  echo "[INFO][${SCRIPT_NAME}] Re-running script with sudo..."
+  exec sudo "$0" "$@"
+fi
+
+# --- Unified Logging System ---
+: "${LOG_FILE:=build.log}"
+touch "$LOG_FILE"
+
+log_internal() {
+  local LEVEL="$1"
+  local MESSAGE="$2"
+  local TIMESTAMP="[$(date +'%Y-%m-%d %H:%M:%S')]"
+  local PREFIX COLOR RESET
+
+  case "$LEVEL" in
+    INFO)   COLOR="\033[1;34m"; PREFIX="INFO" ;;
+    WARN)   COLOR="\033[1;33m"; PREFIX="WARN" ;;
+    ERROR)  COLOR="\033[1;31m"; PREFIX="ERROR" ;;
+    DEBUG)  COLOR="\033[1;36m"; PREFIX="DEBUG" ;;
+    PROMPT) COLOR="\033[1;32m"; PREFIX="PROMPT" ;;
+    *)      COLOR="\033[0m";   PREFIX="INFO" ;;
   esac
+  RESET="\033[0m"
+
+  local LOG_LINE="${TIMESTAMP}[$PREFIX][$SCRIPT_NAME] $MESSAGE"
+
+  if [ -t 1 ]; then
+    echo -e "${COLOR}${LOG_LINE}${RESET}" | tee -a "$LOG_FILE"
+  else
+    echo "$LOG_LINE" >> "$LOG_FILE"
+  fi
 }
+
+# Aliases
+info()    { log_internal INFO "$@"; }
+warn()    { log_internal WARN "$@"; }
+error()   { log_internal ERROR "$@"; exit 1; }
+debug()   { log_internal DEBUG "$@"; }
+success() { log_internal PROMPT "$@"; }
+log()     { log_internal INFO "$@"; }  # legacy compatibility
 
 # Detect available board directories
 BOARD_DIRS=(OUT-ARM-SBC-*)
@@ -271,12 +305,12 @@ umount "$MOUNT_POINT"
 losetup -d "$LOOP_DEVICE"
 log "INFO" "SD card image creation completed successfully."
 
-if [ -n "$BUILD_START_TIME" ]; then
-  BUILD_END_TIME=$(date +%s)
-  BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
-  minutes=$((BUILD_DURATION / 60))
-  seconds=$((BUILD_DURATION % 60))
-  echo "[INFO] Total build time: ${minutes}m ${seconds}s"
-else
-  echo "[WARN] BUILD_START_TIME not set. Cannot show elapsed time."
-fi
+BUILD_END_TIME=$(date +%s)
+BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+minutes=$((BUILD_DURATION / 60))
+seconds=$((BUILD_DURATION % 60))
+
+success "SD card image created successfully in ${minutes}m ${seconds}s"
+info "Exiting script: $SCRIPT_NAME"
+exit 0
+

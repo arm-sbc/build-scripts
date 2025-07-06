@@ -1,12 +1,47 @@
 #!/bin/bash
 
-# Script Name: rk-compile.sh
+SCRIPT_NAME="rk-compile.sh"
+BUILD_OPTION="$1"
+[ -z "$BUILD_OPTION" ] && error "No build option passed. Use 'uboot', 'kernel', 'U-Boot + Kernel' or 'all'."
 
-# Function to log messages with timestamps
-log() {
-  echo -e "\033[1;34m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m"
+BUILD_START_TIME=$(date +%s)
+# --- Logging Setup (Shared Across Scripts) ---
+: "${LOG_FILE:=build.log}"  # fallback if not exported
+touch "$LOG_FILE"
+
+log_internal() {
+  local LEVEL="$1"
+  local MESSAGE="$2"
+  local TIMESTAMP="[$(date +'%Y-%m-%d %H:%M:%S')]"
+  local PREFIX COLOR RESET
+
+  case "$LEVEL" in
+    INFO)   COLOR="\033[1;34m"; PREFIX="INFO" ;;
+    WARN)   COLOR="\033[1;33m"; PREFIX="WARN" ;;
+    ERROR)  COLOR="\033[1;31m"; PREFIX="ERROR" ;;
+    DEBUG)  COLOR="\033[1;36m"; PREFIX="DEBUG" ;;
+    PROMPT) COLOR="\033[1;32m"; PREFIX="PROMPT" ;;
+    *)      COLOR="\033[0m";   PREFIX="INFO" ;;
+  esac
+  RESET="\033[0m"
+  local LOG_LINE="${TIMESTAMP}[$PREFIX][$SCRIPT_NAME] $MESSAGE"
+
+  if [ -t 1 ]; then
+    echo -e "${COLOR}${LOG_LINE}${RESET}" | tee -a "$LOG_FILE"
+  else
+    echo "$LOG_LINE" >> "$LOG_FILE"
+  fi
 }
 
+# --- Aliases ---
+info()    { log_internal INFO "$@"; }
+warn()    { log_internal WARN "$@"; }
+error()   { log_internal ERROR "$@"; exit 1; }
+debug()   { log_internal DEBUG "$@"; }
+success() { log_internal PROMPT "$@"; }
+log()     { log_internal INFO "$@"; }  # legacy
+
+# --- Start Execution ---
 log "Dumping environment variables..."
 env | grep -E 'CROSS_COMPILE|BL31|DEVICE_TREE|CONFIG' > ../script_env_dump.txt
 
@@ -19,7 +54,7 @@ if [ "$BUILD_OPTION" = "uboot" ]; then
   if [ -z "$BOARD" ] || [ -z "$CHIP" ] || [ -z "$UBOOT_DEFCONFIG" ] || [ -z "$OUTPUT_DIR" ]; then
     error "Required environment variables are not set for U-Boot compilation. Please run set_env.sh first."
   fi
-elif [ "$BUILD_OPTION" = "kernel" ] || [ "$BUILD_OPTION" = "all" ]; then
+elif [ "$BUILD_OPTION" = "kernel" ] || [ "$BUILD_OPTION" = "all" ] || [ "$BUILD_OPTION" = "uboot+kernel" ]; then
   # Check all variables, including kernel-related ones
   if [ -z "$BOARD" ] || [ -z "$CHIP" ] || [ -z "$UBOOT_DEFCONFIG" ] || [ -z "$KERNEL_DEFCONFIG" ] || [ -z "$KERNEL_VERSION" ] || [ -z "$OUTPUT_DIR" ]; then
     error "Required environment variables are not set for kernel compilation. Please run set_env.sh first."
@@ -29,25 +64,6 @@ else
 fi
 
 log "Environment variables set: BOARD=$BOARD, CHIP=$CHIP, UBOOT_DEFCONFIG=$UBOOT_DEFCONFIG, KERNEL_DEFCONFIG=$KERNEL_DEFCONFIG, KERNEL_VERSION=$KERNEL_VERSION, OUTPUT_DIR=$OUTPUT_DIR"
-
-# Color-coded log messages
-log() {
-  echo -e "\033[1;34m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m"  # Blue for info
-}
-warn() {
-  echo -e "\033[1;33m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m"  # Yellow for warnings
-}
-error() {
-  echo -e "\033[1;31m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m"  # Red for errors
-  exit 1
-}
-
-ERROR_LOG="$OUTPUT_DIR/error.log"
-error() {
-  echo -e "\033[1;31m[$(date +'%Y-%m-%d %H:%M:%S')] $1\033[0m"  # Red for errors
-  echo "[$(date +'%Y-%m-%d %H:%M:%S')] ERROR: $1" >> "$ERROR_LOG"
-  exit 1
-}
 
 apply_uboot_patches() {
   log "Starting U-Boot patch application process..."
@@ -464,6 +480,15 @@ case "$1" in
     apply_kernel_patches
     compile_kernel
     compile_dts
+    ;;    
+  uboot+kernel)
+    BUILD_OPTION="uboot+kernel"
+    compile_atf
+    apply_uboot_patches
+    compile_uboot
+    apply_kernel_patches
+    compile_kernel
+    compile_dts
     ;;
   all)
     BUILD_OPTION="all"
@@ -476,8 +501,19 @@ case "$1" in
     compile_dts
     ;;
   *)
-    error "Invalid argument. Use 'uboot', 'kernel', or 'all'."
+    error "Invalid argument. Use 'uboot', 'kernel', 'uboot+kernel' or 'all'."
     ;;
 esac
 
 log "Script execution completed successfully."
+
+# --- Script Footer ---
+BUILD_END_TIME=$(date +%s)
+BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
+minutes=$((BUILD_DURATION / 60))
+seconds=$((BUILD_DURATION % 60))
+
+success "rk-compile.sh completed in ${minutes}m ${seconds}s"
+info "Exiting script: $SCRIPT_NAME"
+exit 0
+
