@@ -229,8 +229,9 @@ mkfs.ext4 -F "$ROOTFS_IMG"
 
 mkdir -p "$MNT_ROOTFS"
 sudo mount "$ROOTFS_IMG" "$MNT_ROOTFS"
-log INFO "Copying files to rootfs.img...
-"sudo rsync -aAX --exclude={"/dev/*","/proc/*","/sys/*","/tmp/*","/run/*"} "$ROOTFS_DIR/" "$MNT_ROOTFS/"
+log INFO "Copying files to rootfs.img..."
+sudo rsync -aAX --exclude={"/dev/*","/proc/*","/sys/*","/tmp/*","/run/*"} "$ROOTFS_DIR/" "$MNT_ROOTFS/"
+debug "Contents of rootfs: $(ls -1 "$ROOTFS_DIR" | wc -l) files/folders"
 
 # Copy kernel modules if available
 if [ -d "$OUT_DIR/lib/modules" ]; then
