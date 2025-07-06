@@ -174,7 +174,7 @@ BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))
 minutes=$((BUILD_DURATION / 60))
 seconds=$((BUILD_DURATION % 60))
 
-success "Desktop post-install completed in ${minutes}m ${seconds}s"
+success "✅ Desktop post-install completed in ${minutes}m ${seconds}s"
 info "Exiting script: $SCRIPT_NAME"
 exit 0
 

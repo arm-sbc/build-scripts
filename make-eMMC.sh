@@ -85,7 +85,7 @@ fi
 #--- Paths and Tools ---#
 #OUT_DIR="OUT-$BOARD"
 IMAGE_DIR="$OUT_DIR"
-OUT_UPDATE_IMG="$OUT_DIR/update-emmc$BOARD.img"
+OUT_UPDATE_IMG="$OUT_DIR/update-emmc-$BOARD.img"
 RAW_IMG="$OUT_DIR/update-emmc.raw.img"
 
 #--- Auto-detect CHIP from DTB in OUT_DIR ---#
